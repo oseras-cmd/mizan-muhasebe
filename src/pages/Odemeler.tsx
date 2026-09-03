@@ -567,7 +567,7 @@ export default function Odemeler() {
     <div className="min-h-screen bg-background pl-64 text-foreground">
       <AppHeader />
 
-      <main className="mx-auto max-w-6xl px-6 pb-20 pt-10 print:pt-4">
+      <main className="mx-auto max-w-7xl px-6 pb-20 pt-10 print:pt-4">
         {/* Sayfa başlığı */}
         <div className="print:hidden">
           <p className="text-xs font-medium tracking-[0.14em] text-muted-foreground">
@@ -604,20 +604,21 @@ export default function Odemeler() {
             </div>
           </header>
           <div className="overflow-x-auto">
-            <table className="w-full text-xs" style={{tableLayout: 'fixed'}}>
-              <thead>                    <tr className="border-b border-border/70 text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                      <th className="px-2 py-2 text-center" style={{width: 32}}>S.</th>
-                      <th className="px-2 py-2" style={{width: '25%'}}>Açıklama</th>
-                      <th className="px-2 py-2" style={{width: 80}}>Vade</th>
-                      <th className="px-2 py-2 text-center" style={{width: 42}}>PB</th>
-                      <th className="px-2 py-2 text-right" style={{width: '12%'}}>Tutar</th>
-                      <th className="px-2 py-2 text-right" style={{width: '12%'}}>Ödenen</th>
-                      <th className="px-2 py-2 text-right" style={{width: '12%'}}>Kalan</th>
-                      <th className="px-2 py-2 text-center" style={{width: 56}}>Durum</th>
-                      <th className="px-2 py-2" style={{width: '10%'}}>Hesap</th>
-                      <th className="px-2 py-2" style={{width: '8%'}}>Cari</th>
-                      <th className="px-2 py-2 text-center" style={{width: 32}}></th>
-                    </tr>
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b border-border/70 text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  <th className="px-2 py-2 text-center w-8">S.</th>
+                  <th className="px-2 py-2">Açıklama</th>
+                  <th className="px-2 py-2 w-20">Vade</th>
+                  <th className="px-2 py-2 text-center w-10">PB</th>
+                  <th className="px-2 py-2 text-right w-28">Tutar</th>
+                  <th className="px-2 py-2 text-right w-28">Ödenen</th>
+                  <th className="px-2 py-2 text-right w-28">Kalan</th>
+                  <th className="px-2 py-2 text-center w-16">Durum</th>
+                  <th className="px-2 py-2 w-32">Hesap</th>
+                  <th className="px-2 py-2 w-24">Cari</th>
+                  <th className="px-2 py-2 text-center w-8"></th>
+                </tr>
               </thead>
               <tbody>
                 {filteredPayments.length === 0 ? (
