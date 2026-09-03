@@ -1,0 +1,10 @@
+.env
+.env.local
+node_modules
+dist
+release
+*.exe
+*.zip
+*.tar.gz
+.design-backup
+src/convex/_generated

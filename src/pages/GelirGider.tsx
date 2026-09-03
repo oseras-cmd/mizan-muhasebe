@@ -1,0 +1,326 @@
+import { formatInputValue } from "@/lib/finance/format";
+import { AppHeader } from "@/components/AppHeader";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { accountById, recentTransactions } from "@/lib/finance/dashboard";
+import {
+  formatDate,
+  formatTRY,
+  parseTurkishNumber,
+  todayIso,
+} from "@/lib/finance/format";
+import { addTransaction, useFinanceData } from "@/lib/finance/store";
+import {
+  TRANSACTION_CATEGORIES,
+  type TransactionCategory,
+  type TransactionType,
+} from "@/lib/finance/types";
+import { cn } from "@/lib/utils";
+import {
+  ArrowDownRight,
+  ArrowUpRight,
+  Plus,
+  ReceiptText,
+} from "lucide-react";
+import { useState } from "react";
+import { toast } from "sonner";
+
+function Field({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <Label className="text-xs font-medium text-muted-foreground">
+        {label}
+      </Label>
+      {children}
+    </div>
+  );
+}
+
+export default function GelirGider() {
+  const data = useFinanceData();
+  const [type, setType] = useState<TransactionType>("gelir");
+  const [date, setDate] = useState(todayIso);
+  const [description, setDescription] = useState("");
+  const [category, setCategory] = useState<TransactionCategory>("Satış");
+  const [accountId, setAccountId] = useState(
+    () => data.accounts[0]?.id ?? "",
+  );
+  const [amount, setAmount] = useState("");
+  const [error, setError] = useState<string | null>(null);
+
+  const selectedAccount = accountById(data, accountId);
+  const recent = recentTransactions(data, 8);
+
+  const handleTypeChange = (next: TransactionType) => {
+    setType(next);
+    setCategory(next === "gelir" ? "Satış" : "Maaş");
+  };
+
+  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setError(null);
+
+    const parsedAmount = parseTurkishNumber(amount);
+    if (!description.trim()) {
+      setError("Lütfen bir açıklama girin.");
+      return;
+    }
+    if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+      setError("Lütfen geçerli bir tutar girin.");
+      return;
+    }
+
+    addTransaction({
+      type,
+      description: description.trim(),
+      category,
+      accountId,
+      amount: parsedAmount,
+      date,
+    });
+    toast.success(type === "gelir" ? "Gelir kaydedildi." : "Gider kaydedildi.");
+    setDescription("");
+    setAmount("");
+  };
+
+  return (
+    <div className="min-h-screen bg-background text-foreground">
+      <AppHeader />
+
+      <main className="mx-auto max-w-6xl px-6 pb-20 pt-10">
+        {/* Sayfa başlığı */}
+        <div>
+          <p className="text-xs font-medium tracking-[0.14em] text-muted-foreground">
+            Modül
+          </p>
+          <h1 className="mt-1 text-2xl font-semibold tracking-tight">
+            Gelir / Gider Takibi
+          </h1>
+          <p className="mt-2 max-w-xl text-sm leading-6 text-muted-foreground">
+            Yeni gelir ve gider kayıtlarınızı ekleyin. Değişiklikler anında
+            kaydedilir ve Genel Bakış paneline yansır.
+          </p>
+        </div>
+
+        <div className="mt-8 grid gap-6 lg:grid-cols-5">
+          {/* Yeni kayıt formu */}
+          <section className="self-start rounded-lg border bg-card lg:col-span-2">
+            <header className="border-b border-border/70 px-5 py-4">
+              <h2 className="text-sm font-semibold text-foreground">
+                Yeni Kayıt
+              </h2>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                Gelir veya gider hareketi ekleyin
+              </p>
+            </header>
+            <form
+              onSubmit={handleSubmit}
+              className="grid gap-5 p-5 sm:p-6"
+            >
+              {/* Tür seçici */}
+              <div className="grid grid-cols-2 gap-px rounded-md border bg-border p-px">
+                <button
+                  type="button"
+                  onClick={() => handleTypeChange("gelir")}
+                  className={cn(
+                    "flex items-center justify-center gap-1.5 rounded-[5px] py-2 text-sm font-medium transition-colors",
+                    type === "gelir"
+                      ? "bg-background text-foreground shadow-sm"
+                      : "bg-transparent text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  <ArrowUpRight className="size-4" />
+                  Gelir
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleTypeChange("gider")}
+                  className={cn(
+                    "flex items-center justify-center gap-1.5 rounded-[5px] py-2 text-sm font-medium transition-colors",
+                    type === "gider"
+                      ? "bg-background text-foreground shadow-sm"
+                      : "bg-transparent text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  <ArrowDownRight className="size-4" />
+                  Gider
+                </button>
+              </div>
+
+              <div className="grid gap-5 sm:grid-cols-2">
+                <Field label="Tarih">
+                  <Input
+                    type="date"
+                    value={date}
+                    onChange={(event) => setDate(event.target.value)}
+                    required
+                  />
+                </Field>
+                <Field label="Kategori">
+                  <Select
+                    value={category}
+                    onValueChange={(value) =>
+                      setCategory(value as TransactionCategory)
+                    }
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Kategori seçin" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {TRANSACTION_CATEGORIES.map((cat) => (
+                        <SelectItem key={cat} value={cat}>
+                          {cat}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </Field>
+              </div>
+
+              <div className="grid gap-5 sm:grid-cols-2">
+                <Field label="Kasa / Banka">
+                  <Select
+                    value={accountId}
+                    onValueChange={setAccountId}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Hesap seçin" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {data.accounts.map((account) => (
+                        <SelectItem key={account.id} value={account.id}>
+                          {account.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {selectedAccount && (
+                    <p className="text-xs text-muted-foreground">
+                      Mevcut bakiye: {formatTRY(selectedAccount.balance)}
+                    </p>
+                  )}
+                </Field>
+                <Field label="Tutar (₺)">
+                  <Input
+                    type="text"
+                    inputMode="decimal"
+                    value={amount}
+                    onChange={(event) => setAmount(formatInputValue(event.target.value))}
+                    placeholder="0,00"
+                    className="tabular-nums"
+                    required
+                  />
+                </Field>
+              </div>
+
+              <Field label="Açıklama">
+                <Input
+                  value={description}
+                  onChange={(event) => setDescription(event.target.value)}
+                  placeholder="Örn. Perakende satış — Günlük hasılat"
+                  required
+                />
+              </Field>
+
+              {error && (
+                <p className="text-sm text-destructive">{error}</p>
+              )}
+
+              <div className="flex justify-end">
+                <Button type="submit">
+                  <Plus className="mr-2 size-4" />
+                  {type === "gelir" ? "Geliri Kaydet" : "Gideri Kaydet"}
+                </Button>
+              </div>
+            </form>
+          </section>
+
+          {/* Son kayıtlar */}
+          <section className="rounded-lg border bg-card lg:col-span-3">
+            <header className="flex items-center justify-between gap-4 border-b border-border/70 px-5 py-4">
+              <div>
+                <h2 className="text-sm font-semibold text-foreground">
+                  Son Kayıtlar
+                </h2>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  En son eklenen hareketler
+                </p>
+              </div>
+              <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <ReceiptText className="size-3.5" />
+                {recent.length} hareket
+              </span>
+            </header>
+            <ul className="divide-y divide-border/70">
+              {recent.map((tx) => {
+                const account = accountById(data, tx.accountId);
+                const isIncome = tx.type === "gelir";
+                return (
+                  <li
+                    key={tx.id}
+                    className="flex items-center justify-between gap-4 px-5 py-4"
+                  >
+                    <div className="flex min-w-0 items-center gap-3">
+                      <div
+                        className={cn(
+                          "flex h-9 w-9 shrink-0 items-center justify-center rounded-md border",
+                          isIncome
+                            ? "border-foreground/15 bg-foreground/[0.04]"
+                            : "border-border bg-background",
+                        )}
+                      >
+                        {isIncome ? (
+                          <ArrowUpRight className="size-4 text-foreground" />
+                        ) : (
+                          <ArrowDownRight className="size-4 text-muted-foreground" />
+                        )}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium text-foreground">
+                          {tx.description}
+                        </p>
+                        <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                          {tx.category}
+                          {account ? ` · ${account.name}` : ""} ·{" "}
+                          {formatDate(tx.date)}
+                        </p>
+                      </div>
+                    </div>
+                    <p
+                      className={cn(
+                        "shrink-0 font-mono text-sm tabular-nums",
+                        isIncome ? "text-foreground" : "text-muted-foreground",
+                      )}
+                    >
+                      {isIncome ? "+" : "−"}
+                      {formatTRY(tx.amount)}
+                    </p>
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        </div>
+
+        <footer className="mt-14 border-t border-border/70 pt-6 text-center text-xs text-muted-foreground">
+          Mizan — verileriniz bu tarayıcıda güvenle saklanır ve sayfa
+          yenilense de korunur.
+        </footer>
+      </main>
+    </div>
+  );
+}
