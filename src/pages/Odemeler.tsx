@@ -593,8 +593,8 @@ export default function Odemeler() {
           </p>
         </div>
 
-        {/* Ödeme Listesi — tam genişlik, tablonun orijinal boyutu */}
-        <section className="mt-8 overflow-hidden rounded-lg border bg-card print:border-0">
+        {/* Ödeme Listesi — tam genişlik */}
+        <section className="mt-5 overflow-hidden rounded-lg border bg-card print:border-0">
           <header className="flex items-center justify-between border-b border-border/70 px-5 py-3">
             <div>
               <h2 className="text-sm font-semibold text-foreground">Ödeme Listesi</h2>
@@ -604,21 +604,20 @@ export default function Odemeler() {
             </div>
           </header>
           <div className="overflow-x-auto">
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="border-b border-border/70 text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                  <th className="px-3 py-2.5 text-center w-8">S.</th>
-                  <th className="px-3 py-2.5">Açıklama</th>
-                  <th className="px-3 py-2.5">Vade</th>
-                  <th className="px-3 py-2.5 text-center">PB</th>
-                  <th className="px-3 py-2.5 text-right">Tutar</th>
-                  <th className="px-3 py-2.5 text-right">Ödenen</th>
-                  <th className="px-3 py-2.5 text-right">Kalan</th>
-                  <th className="px-3 py-2.5 text-center">Durum</th>
-                  <th className="px-3 py-2.5">Hesap</th>
-                  <th className="px-3 py-2.5">Cari</th>
-                  <th className="px-3 py-2.5 text-center w-10"></th>
-                </tr>
+            <table className="w-full text-xs" style={{tableLayout: 'fixed'}}>
+              <thead>                    <tr className="border-b border-border/70 text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                      <th className="px-2 py-2 text-center" style={{width: 32}}>S.</th>
+                      <th className="px-2 py-2" style={{width: '25%'}}>Açıklama</th>
+                      <th className="px-2 py-2" style={{width: 80}}>Vade</th>
+                      <th className="px-2 py-2 text-center" style={{width: 42}}>PB</th>
+                      <th className="px-2 py-2 text-right" style={{width: '12%'}}>Tutar</th>
+                      <th className="px-2 py-2 text-right" style={{width: '12%'}}>Ödenen</th>
+                      <th className="px-2 py-2 text-right" style={{width: '12%'}}>Kalan</th>
+                      <th className="px-2 py-2 text-center" style={{width: 56}}>Durum</th>
+                      <th className="px-2 py-2" style={{width: '10%'}}>Hesap</th>
+                      <th className="px-2 py-2" style={{width: '8%'}}>Cari</th>
+                      <th className="px-2 py-2 text-center" style={{width: 32}}></th>
+                    </tr>
               </thead>
               <tbody>
                 {filteredPayments.length === 0 ? (
@@ -660,12 +659,12 @@ export default function Odemeler() {
                           idx % 2 === 0 ? "bg-background" : "bg-muted/10",
                         )}
                       >
-                        <td className="px-3 py-2.5 text-center tabular-nums text-muted-foreground">
+                        <td className="px-2 py-2 text-center tabular-nums text-muted-foreground">
                           {idx + 1}
                         </td>
-                        <td className="px-3 py-2.5">
+                        <td className="px-2 py-2">
                           <div className="flex items-center gap-2">
-                            <span className="truncate font-medium text-foreground max-w-[240px]">
+                            <span className="truncate font-medium text-foreground">
                               {payment.label}
                             </span>
                             {payment.recurringType && payment.recurringType !== "yok" && (
@@ -676,12 +675,12 @@ export default function Odemeler() {
                             )}
                           </div>
                           {payment.description && (
-                            <p className="mt-0.5 truncate text-[11px] text-muted-foreground/70 italic max-w-[240px]">
+                            <p className="mt-0.5 truncate text-[11px] text-muted-foreground/70 italic">
                               {payment.description}
                             </p>
                           )}
                         </td>
-                        <td className="px-3 py-2.5 tabular-nums text-muted-foreground">
+                        <td className="px-2 py-2 tabular-nums text-muted-foreground">
                           <span className={cn(isOverdue && "font-medium text-destructive")}>
                             {formatDate(payment.dueDate)}
                           </span>
@@ -689,15 +688,15 @@ export default function Odemeler() {
                             <span className="ml-1 text-[9px] text-destructive">⚠</span>
                           )}
                         </td>
-                        <td className="px-3 py-2.5 text-center">
+                        <td className="px-2 py-2 text-center">
                           <span className="inline-flex items-center rounded-md border border-border/50 bg-muted/30 px-1.5 py-0.5 text-[10px] font-bold tabular-nums">
                             {cur}
                           </span>
                         </td>
-                        <td className="px-3 py-2.5 text-right tabular-nums font-medium text-foreground">
+                        <td className="px-2 py-2 text-right tabular-nums font-medium text-foreground">
                           {formatCurrency(payment.amount, cur)}
                         </td>
-                        <td className="px-3 py-2.5 text-right tabular-nums">
+                        <td className="px-2 py-2 text-right tabular-nums">
                           {paid > 0 ? (
                             <span className="text-green-600">
                               {formatCurrency(paid, cur)}
@@ -707,7 +706,7 @@ export default function Odemeler() {
                             <span className="text-muted-foreground">—</span>
                           )}
                         </td>
-                        <td className="px-3 py-2.5 text-right tabular-nums">
+                        <td className="px-2 py-2 text-right tabular-nums">
                           <span className={cn(
                             "font-medium",
                             isOverdue ? "text-destructive" : "text-foreground",
@@ -715,15 +714,15 @@ export default function Odemeler() {
                             {remaining > 0 ? formatCurrency(remaining, cur) : <span className="text-green-600">✓</span>}
                           </span>
                         </td>
-                        <td className="px-3 py-2.5 text-center">
+                        <td className="px-2 py-2 text-center">
                           <span className={cn("inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold", durumClass)}>
                             {durumLabel}
                           </span>
                         </td>
-                        <td className="px-3 py-2.5 text-muted-foreground truncate max-w-[120px]">
+                        <td className="px-2 py-2 text-muted-foreground truncate">
                           {account?.name ?? "—"}
                         </td>
-                        <td className="px-3 py-2.5 truncate max-w-[120px]">
+                        <td className="px-2 py-2 truncate">
                           {contact ? (
                             <span className="inline-flex items-center gap-0.5 text-primary">
                               <Users className="size-2.5" />
@@ -733,7 +732,7 @@ export default function Odemeler() {
                             <span className="text-muted-foreground">—</span>
                           )}
                         </td>
-                        <td className="px-3 py-2.5 text-center">
+                        <td className="px-2 py-2 text-center">
                           <div className="flex items-center justify-center gap-0.5">
                             {renderPaymentActions(payment.id)}
                           </div>
@@ -742,30 +741,29 @@ export default function Odemeler() {
                     );
                   })
                 )}
-              </tbody>
-              {filteredPayments.length > 0 && (
-                <tfoot>
-                  <tr className="border-t-2 border-border font-semibold text-foreground">
-                    <td colSpan={3} className="px-3 py-2.5 text-right text-xs">TOPLAM</td>
-                    <td className="px-3 py-2.5 text-center text-xs">—</td>
-                    <td className="px-3 py-2.5 text-right tabular-nums text-sm">
-                      {formatTRY(filteredPayments.reduce((s, p) => s + p.amount, 0))}
-                    </td>
-                    <td className="px-3 py-2.5 text-right tabular-nums text-sm text-green-600">
-                      {formatTRY(filteredPayments.reduce((s, p) => s + (p.paidAmount ?? 0), 0))}
-                    </td>
-                    <td className="px-3 py-2.5 text-right tabular-nums text-sm">
-                      {formatTRY(filteredPayments.reduce((s, p) => s + (p.amount - (p.paidAmount ?? 0)), 0))}
-                    </td>
-                    <td colSpan={3}></td>
-                  </tr>
-                </tfoot>
+              </tbody>                  {filteredPayments.length > 0 && (
+                    <tfoot>
+                      <tr className="border-t-2 border-border font-semibold text-foreground">
+                        <td colSpan={3} className="px-2 py-2 text-right text-xs">TOPLAM</td>
+                        <td className="px-2 py-2 text-center text-xs">—</td>
+                        <td className="px-2 py-2 text-right tabular-nums text-sm">
+                          {formatTRY(filteredPayments.reduce((s, p) => s + p.amount, 0))}
+                        </td>
+                        <td className="px-2 py-2 text-right tabular-nums text-sm text-green-600">
+                          {formatTRY(filteredPayments.reduce((s, p) => s + (p.paidAmount ?? 0), 0))}
+                        </td>
+                        <td className="px-2 py-2 text-right tabular-nums text-sm">
+                          {formatTRY(filteredPayments.reduce((s, p) => s + (p.amount - (p.paidAmount ?? 0)), 0))}
+                        </td>
+                        <td colSpan={3}></td>
+                      </tr>
+                    </tfoot>
               )}
             </table>
           </div>
         </section>
 
-        <div className="mt-6 grid gap-6 lg:grid-cols-5 print:grid-cols-1">
+        <div className="mt-4 grid gap-6 lg:grid-cols-5 print:grid-cols-1">
           {/* Sol panel: form + rapor */}
           <div className="self-start space-y-6 lg:col-span-2 print:hidden">
             {/* Yeni ödeme formu */}
