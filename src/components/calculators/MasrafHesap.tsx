@@ -16,7 +16,7 @@ import {
   Pencil,
   X,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { CalcCard, Field, ResultBox, ResultRow, ResultTotalRow, formatNumber } from "./shared";
 
 /* ─── Sabitler ─── */
@@ -122,6 +122,35 @@ const EMPTY_ITEM: Omit<MasrafItem, "id"> = {
   kkeg: 0,
 };
 
+/* ─── Kalıcılık (localStorage) — çıkış/yenileme sonrası veriler korunur ─── */
+const MASRAF_STORAGE_KEY = "mizan-masraf-data-v1";
+
+interface MasrafStorage {
+  firma: FirmaBilgileri;
+  items: MasrafItem[];
+  nextId: number;
+}
+
+function loadMasrafData(): MasrafStorage {
+  try {
+    const raw = window.localStorage.getItem(MASRAF_STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw) as Partial<MasrafStorage>;
+      if (Array.isArray(parsed.items) && parsed.firma) {
+        const maxId = parsed.items.reduce((max, i) => Math.max(max, i.id ?? 0), 0);
+        return {
+          firma: { ...DEFAULT_FIRMA, ...parsed.firma },
+          items: parsed.items,
+          nextId: typeof parsed.nextId === "number" && parsed.nextId > maxId ? parsed.nextId : maxId + 1,
+        };
+      }
+    }
+  } catch {
+    // Bozuk veri — temiz başlangıca dön.
+  }
+  return { firma: { ...DEFAULT_FIRMA }, items: [], nextId: 1 };
+}
+
 /* ─── KDV Hesaplama ─── */
 function kdvHesapla(toplam: number, oran: number) {
   if (oran === 0) return { matrah: toplam, kdv: 0 };
@@ -138,12 +167,25 @@ function fmt(value: number): string {
 type DagilimVal = { matrah: number; kdv: number; kkeg: number; toplam: number; belgeAdet: number };
 
 export function MasrafHesap() {
-  const [firma, setFirma] = useState<FirmaBilgileri>(DEFAULT_FIRMA);
-  const [items, setItems] = useState<MasrafItem[]>([]);
-  const [nextId, setNextId] = useState(1);
+  const [initial] = useState(loadMasrafData);
+  const [firma, setFirma] = useState<FirmaBilgileri>(initial.firma);
+  const [items, setItems] = useState<MasrafItem[]>(initial.items);
+  const [nextId, setNextId] = useState(initial.nextId);
   const [form, setForm] = useState<Omit<MasrafItem, "id">>({ ...EMPTY_ITEM });
   const [editingId, setEditingId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  /* Her değişiklikte kalıcı depoya yaz */
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(
+        MASRAF_STORAGE_KEY,
+        JSON.stringify({ firma, items, nextId } satisfies MasrafStorage),
+      );
+    } catch {
+      // Depolama dolu veya erişilemez — sessizce devam et.
+    }
+  }, [firma, items, nextId]);
 
   /* ─── KDV Sütunları hesapla ─── */
   const hesaplamalar = useMemo(() => {
@@ -263,6 +305,11 @@ export function MasrafHesap() {
     setEditingId(null);
     setFirma({ ...DEFAULT_FIRMA });
     setError(null);
+    try {
+      window.localStorage.removeItem(MASRAF_STORAGE_KEY);
+    } catch {
+      // ignore
+    }
   };
 
   /* ─── Yazdır ─── */
