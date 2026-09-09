@@ -13,6 +13,8 @@ import {
   ReceiptText,
   Building2,
   FileSpreadsheet,
+  Pencil,
+  X,
 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { CalcCard, Field, ResultBox, ResultRow, ResultTotalRow, formatNumber } from "./shared";
@@ -140,6 +142,7 @@ export function MasrafHesap() {
   const [items, setItems] = useState<MasrafItem[]>([]);
   const [nextId, setNextId] = useState(1);
   const [form, setForm] = useState<Omit<MasrafItem, "id">>({ ...EMPTY_ITEM });
+  const [editingId, setEditingId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   /* ─── KDV Sütunları hesapla ─── */
@@ -207,7 +210,7 @@ export function MasrafHesap() {
     };
   }, [items]);
 
-  /* ─── Ekle ─── */
+  /* ─── Ekle / Güncelle ─── */
   const handleAdd = () => {
     if (!form.masrafAdi.trim()) {
       setError("Masraf adı girin.");
@@ -217,8 +220,32 @@ export function MasrafHesap() {
       setError("Geçerli bir tutar girin.");
       return;
     }
+    if (editingId !== null) {
+      setItems((prev) => prev.map((i) => (i.id === editingId ? { ...form, id: editingId } : i)));
+      setEditingId(null);
+      setForm({ ...EMPTY_ITEM, belgeTarihi: form.belgeTarihi });
+      setError(null);
+      return;
+    }
     setItems((prev) => [...prev, { ...form, id: nextId }]);
     setNextId((n) => n + 1);
+    setForm({ ...EMPTY_ITEM, belgeTarihi: form.belgeTarihi });
+    setError(null);
+  };
+
+  /* ─── Düzenlemeye başla ─── */
+  const handleEdit = (id: number) => {
+    const item = items.find((i) => i.id === id);
+    if (!item) return;
+    const { id: _id, ...rest } = item;
+    setForm({ ...rest });
+    setEditingId(id);
+    setError(null);
+  };
+
+  /* ─── Düzenlemeyi iptal et ─── */
+  const handleCancelEdit = () => {
+    setEditingId(null);
     setForm({ ...EMPTY_ITEM, belgeTarihi: form.belgeTarihi });
     setError(null);
   };
@@ -233,6 +260,7 @@ export function MasrafHesap() {
     setItems([]);
     setNextId(1);
     setForm({ ...EMPTY_ITEM });
+    setEditingId(null);
     setFirma({ ...DEFAULT_FIRMA });
     setError(null);
   };
@@ -308,8 +336,8 @@ export function MasrafHesap() {
 
         {/* Masraf Ekleme Formu */}
         <CalcCard
-          title="Masraf Ekle"
-          subtitle="Yeni masraf kalemi ekleyin"
+          title={editingId !== null ? "Masrafı Düzenle" : "Masraf Ekle"}
+          subtitle={editingId !== null ? "Değişiklikleri kaydedin veya iptal edin" : "Yeni masraf kalemi ekleyin"}
           actions={
             <div className="flex items-center gap-2">
               <Button variant="ghost" size="sm" className="gap-1.5 text-xs" onClick={handleReset}>
@@ -449,10 +477,22 @@ export function MasrafHesap() {
 
             {error && <p className="text-xs text-destructive">{error}</p>}
 
-            <Button type="button" onClick={handleAdd} className="w-full">
-              <Plus className="mr-2 size-4" />
-              Masraf Ekle
-            </Button>
+            {editingId !== null ? (
+              <div className="grid grid-cols-[1fr_auto] gap-2">
+                <Button type="button" onClick={handleAdd}>
+                  Kaydet
+                </Button>
+                <Button type="button" variant="outline" onClick={handleCancelEdit}>
+                  <X className="size-4" />
+                  İptal
+                </Button>
+              </div>
+            ) : (
+              <Button type="button" onClick={handleAdd} className="w-full">
+                <Plus className="mr-2 size-4" />
+                Masraf Ekle
+              </Button>
+            )}
           </div>
         </CalcCard>
 
@@ -538,7 +578,7 @@ export function MasrafHesap() {
                   <th className="px-2 py-2 text-right">KKEG</th>
                   <th className="px-2 py-2">Ödeme</th>
                   <th className="px-2 py-2">Merkez</th>
-                  <th className="px-2 py-2 text-center w-8"></th>
+                  <th className="px-2 py-2 text-center w-14">İşlem</th>
                 </tr>
               </thead>
               <tbody>
@@ -586,14 +626,26 @@ export function MasrafHesap() {
                       <td className="px-2 py-2 text-muted-foreground">{item.odemeTuru}</td>
                       <td className="px-2 py-2 text-muted-foreground">{item.masrafMerkez}</td>
                       <td className="px-2 py-2 text-center">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="size-6 text-muted-foreground hover:text-destructive"
-                          onClick={() => handleDelete(item.id)}
-                        >
-                          <Trash2 className="size-3" />
-                        </Button>
+                        <div className="flex items-center justify-center gap-0.5">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="size-6 text-muted-foreground hover:text-foreground"
+                            title="Düzenle"
+                            onClick={() => handleEdit(item.id)}
+                          >
+                            <Pencil className="size-3" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="size-6 text-muted-foreground hover:text-destructive"
+                            title="Sil"
+                            onClick={() => handleDelete(item.id)}
+                          >
+                            <Trash2 className="size-3" />
+                          </Button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -606,7 +658,7 @@ export function MasrafHesap() {
                   <td className="px-2 py-2.5 text-right tabular-nums text-sm">{fmt(hesaplamalar.toplamMatrah)}</td>
                   <td className="px-2 py-2.5 text-right tabular-nums text-sm text-orange-600">{fmt(hesaplamalar.toplamKdv)}</td>
                   <td className="px-2 py-2.5 text-right tabular-nums text-sm">{fmt(hesaplamalar.toplamKkeg)}</td>
-                  <td colSpan={3}></td>
+                  <td colSpan={2}></td>
                 </tr>
               </tfoot>
             </table>
