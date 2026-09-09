@@ -1,6 +1,7 @@
 import { AppHeader } from "@/components/AppHeader";
 import { FormattedInput } from "@/components/FormattedInput";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -92,6 +93,7 @@ export default function Odemeler() {
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState<FilterStatus>("tumu");
+  const [showDialog, setShowDialog] = useState(false);
 
   const overdue = overduePayments(data);
   const overdueTotal = overdue.reduce((sum, payment) => sum + payment.amount, 0);
@@ -188,6 +190,7 @@ export default function Odemeler() {
     setDescription("");
     setPaymentCurrency("TRY");
     setError(null);
+    setShowDialog(false);
   };
 
   const handleComplete = (paymentId: string, partial?: number) => {
@@ -765,9 +768,9 @@ export default function Odemeler() {
         </section>
 
         <div className="mt-4 grid gap-6 lg:grid-cols-5 print:grid-cols-1">
-          {/* Sol panel: form + rapor */}
+          {/* Sol panel: hızlı ekle + rapor */}
           <div className="self-start space-y-6 lg:col-span-2 print:hidden">
-            {/* Yeni ödeme formu */}
+            {/* Yeni ödeme — açılır pencere tetikleyicisi */}
             <section className="rounded-lg border bg-card">
               <header className="border-b border-border/70 px-5 py-4">
                 <h2 className="text-sm font-semibold text-foreground">
@@ -777,179 +780,23 @@ export default function Odemeler() {
                   Planlanacak ödemeyi ekleyin
                 </p>
               </header>
-              <form onSubmit={handleSubmit} className="grid gap-5 p-5 sm:p-6">
-                <div className="flex flex-col gap-1.5">
-                  <Label className="text-xs font-medium text-muted-foreground">
-                    Açıklama
-                  </Label>
-                  <Input
-                    value={label}
-                    onChange={(event) => {
-                      setLabel(event.target.value);
-                      setError(null);
-                    }}
-                    placeholder="Örn. Tedarikçi ödemesi — Yılmaz Tekstil"
-                    required
-                  />
-                </div>
-
-                <div className="flex flex-col gap-1.5">
-                  <Label className="text-xs font-medium text-muted-foreground">
-                    Ödenecek Hesap
-                  </Label>
-                  <select
-                    value={accountId}
-                    onChange={(event) => {
-                      setAccountId(event.target.value);
-                      setError(null);
-                    }}
-                    className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]"
-                  >
-                    <option value="">Hesap seçin</option>
-                    {data.accounts.map((account) => (
-                      <option key={account.id} value={account.id}>
-                        {account.name} ({formatTRY(account.balance)})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {contactsSorted(data).length > 0 && (
-                  <div className="flex flex-col gap-1.5">
-                    <Label className="text-xs font-medium text-muted-foreground">
-                      <Users className="mr-1 inline-block size-3" />
-                      Cari (Opsiyonel)
-                    </Label>
-                    <select
-                      value={contactId}
-                      onChange={(event) => setContactId(event.target.value)}
-                      className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]"
-                    >
-                      <option value="">Cari seçin (opsiyonel)</option>
-                      {contactsSorted(data).map((contact) => (
-                        <option key={contact.id} value={contact.id}>
-                          {contact.name} ({contact.type === "musteri" ? "Müşteri" : "Tedarikçi"})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-
-                <div className="grid gap-5 sm:grid-cols-2">
-                  <div className="flex flex-col gap-1.5">
-                    <Label className="text-xs font-medium text-muted-foreground">
-                      Tutar (₺)
-                    </Label>
-                    <FormattedInput
-                      value={amount}
-                      onChange={(v) => { setAmount(v); setError(null); }}
-                      placeholder="0,00"
-                      required
-                    />
-                  </div>
-                  <div className="flex flex-col gap-1.5">
-                    <Label className="text-xs font-medium text-muted-foreground">
-                      Vade Tarihi
-                    </Label>
-                    <Input
-                      type="date"
-                      value={dueDate}
-                      onChange={(event) => setDueDate(event.target.value)}
-                      required
-                    />
-                  </div>
-                </div>
-
-                {/* Tekrarlama seçenekleri */}
-                <div className="flex flex-col gap-1.5">
-                  <Label className="text-xs font-medium text-muted-foreground">
-                    <Repeat className="mr-1 inline-block size-3" />
-                    Tekrarlama
-                  </Label>
-                  <select
-                    value={recurringType}
-                    onChange={(event) => {
-                      setRecurringType(event.target.value as RecurringType);
-                      setError(null);
-                    }}
-                    className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]"
-                  >
-                    <option value="yok">Tekrar yok (tek seferlik)</option>
-                    <option value="gunluk">Her gün</option>
-                    <option value="haftalik">Her hafta</option>
-                    <option value="aylik">Her ay</option>
-                    <option value="yillik">Her yıl</option>
-                  </select>
-                </div>
-
-                {recurringType !== "yok" && (
-                  <div className="flex flex-col gap-1.5">
-                    <Label className="text-xs font-medium text-muted-foreground">
-                      Bitiş Tarihi (opsiyonel)
-                    </Label>
-                    <Input
-                      type="date"
-                      value={recurringEndDate}
-                      onChange={(event) => setRecurringEndDate(event.target.value)}
-                      placeholder="Belirtilmezse süresiz tekrarlanır"
-                    />
-                    <p className="text-[11px] text-muted-foreground/70">
-                      Boş bırakırsanız ödeme süresiz olarak her dönem tekrarlanır.
-                    </p>
-                  </div>
-                )}
-
-                <div className="flex flex-col gap-1.5">
-                  <Label className="text-xs font-medium text-muted-foreground">
-                    <Coins className="mr-1 inline-block size-3" />
-                    Para Birimi
-                  </Label>
-                  <div className="grid grid-cols-3 gap-1.5">
-                    {PAYMENT_CURRENCY_OPTIONS.map((opt) => (
-                      <button
-                        key={opt.value}
-                        type="button"
-                        onClick={() => setPaymentCurrency(opt.value)}
-                        className={cn(
-                          "flex items-center justify-center gap-1.5 rounded-md border px-3 py-2 text-xs font-medium transition-colors",
-                          paymentCurrency === opt.value
-                            ? "border-primary bg-primary/10 text-primary"
-                            : "border-border/70 bg-background text-muted-foreground hover:text-foreground",
-                        )}
-                      >
-                        <span>{opt.symbol}</span>
-                        <span>{opt.value}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="flex flex-col gap-1.5">
-                  <Label className="text-xs font-medium text-muted-foreground">
-                    Açıklama Notu (Opsiyonel)
-                  </Label>
-                  <textarea
-                    value={description}
-                    onChange={(event) => {
-                      setDescription(event.target.value);
-                      setError(null);
-                    }}
-                    placeholder="Ek bilgi veya not"
-                    rows={2}
-                    className="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] resize-none"
-                  />
-                </div>
-
-                {error && <p className="text-sm text-destructive">{error}</p>}
-
-                <div className="flex justify-end">
-                  <Button type="submit" disabled={!label.trim() || !accountId || amount <= 0}>
-                    <Plus className="mr-2 size-4" />
-                    Ödemeyi Planla
-                  </Button>
-                </div>
-              </form>
+              <div className="p-5 sm:p-6">
+                <Button
+                  type="button"
+                  onClick={() => setShowDialog(true)}
+                  className="h-24 w-full flex-col gap-2 text-base font-semibold"
+                >
+                  <span className="flex size-10 items-center justify-center rounded-full bg-primary-foreground/15">
+                    <Plus className="size-6" />
+                  </span>
+                  Yeni Ödeme Ekle
+                </Button>
+                <p className="mt-3 text-center text-[11px] text-muted-foreground/70">
+                  Ödeme girişi açılır pencerede yapılır.
+                </p>
+              </div>
             </section>
+
 
             {/* Ödeme Raporu */}
             <section className="rounded-lg border bg-card">
@@ -1219,6 +1066,198 @@ export default function Odemeler() {
           yenilense de korunur.
         </footer>
       </main>
+
+      {/* Yeni Ödeme — Açılır Pencere */}
+      <Dialog open={showDialog} onOpenChange={setShowDialog}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Yeni Ödeme Ekle</DialogTitle>
+            <DialogDescription>
+              Planlanacak ödemenin bilgilerini girin.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleSubmit} className="grid gap-4">
+            <div className="flex flex-col gap-1.5">
+              <Label className="text-xs font-medium text-muted-foreground">
+                Açıklama
+              </Label>
+              <Input
+                value={label}
+                onChange={(event) => {
+                  setLabel(event.target.value);
+                  setError(null);
+                }}
+                placeholder="Örn. Tedarikçi ödemesi — Yılmaz Tekstil"
+                required
+                autoFocus
+              />
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <Label className="text-xs font-medium text-muted-foreground">
+                Ödenecek Hesap
+              </Label>
+              <select
+                value={accountId}
+                onChange={(event) => {
+                  setAccountId(event.target.value);
+                  setError(null);
+                }}
+                className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]"
+              >
+                <option value="">Hesap seçin</option>
+                {data.accounts.map((account) => (
+                  <option key={account.id} value={account.id}>
+                    {account.name} ({formatTRY(account.balance)})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {contactsSorted(data).length > 0 && (
+              <div className="flex flex-col gap-1.5">
+                <Label className="text-xs font-medium text-muted-foreground">
+                  <Users className="mr-1 inline-block size-3" />
+                  Cari (Opsiyonel)
+                </Label>
+                <select
+                  value={contactId}
+                  onChange={(event) => setContactId(event.target.value)}
+                  className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]"
+                >
+                  <option value="">Cari seçin (opsiyonel)</option>
+                  {contactsSorted(data).map((contact) => (
+                    <option key={contact.id} value={contact.id}>
+                      {contact.name} ({contact.type === "musteri" ? "Müşteri" : "Tedarikçi"})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="flex flex-col gap-1.5">
+                <Label className="text-xs font-medium text-muted-foreground">
+                  Tutar
+                </Label>
+                <FormattedInput
+                  value={amount}
+                  onChange={(v) => { setAmount(v); setError(null); }}
+                  placeholder="0,00"
+                  required
+                />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label className="text-xs font-medium text-muted-foreground">
+                  Vade Tarihi
+                </Label>
+                <Input
+                  type="date"
+                  value={dueDate}
+                  onChange={(event) => setDueDate(event.target.value)}
+                  required
+                />
+              </div>
+            </div>
+
+            {/* Tekrarlama seçenekleri */}
+            <div className="flex flex-col gap-1.5">
+              <Label className="text-xs font-medium text-muted-foreground">
+                <Repeat className="mr-1 inline-block size-3" />
+                Tekrarlama
+              </Label>
+              <select
+                value={recurringType}
+                onChange={(event) => {
+                  setRecurringType(event.target.value as RecurringType);
+                  setError(null);
+                }}
+                className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]"
+              >
+                <option value="yok">Tekrar yok (tek seferlik)</option>
+                <option value="gunluk">Her gün</option>
+                <option value="haftalik">Her hafta</option>
+                <option value="aylik">Her ay</option>
+                <option value="yillik">Her yıl</option>
+              </select>
+            </div>
+
+            {recurringType !== "yok" && (
+              <div className="flex flex-col gap-1.5">
+                <Label className="text-xs font-medium text-muted-foreground">
+                  Bitiş Tarihi (opsiyonel)
+                </Label>
+                <Input
+                  type="date"
+                  value={recurringEndDate}
+                  onChange={(event) => setRecurringEndDate(event.target.value)}
+                  placeholder="Belirtilmezse süresiz tekrarlanır"
+                />
+                <p className="text-[11px] text-muted-foreground/70">
+                  Boş bırakırsanız ödeme süresiz olarak her dönem tekrarlanır.
+                </p>
+              </div>
+            )}
+
+            <div className="flex flex-col gap-1.5">
+              <Label className="text-xs font-medium text-muted-foreground">
+                <Coins className="mr-1 inline-block size-3" />
+                Para Birimi
+              </Label>
+              <div className="grid grid-cols-3 gap-1.5">
+                {PAYMENT_CURRENCY_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => setPaymentCurrency(opt.value)}
+                    className={cn(
+                      "flex items-center justify-center gap-1.5 rounded-md border px-3 py-2 text-xs font-medium transition-colors",
+                      paymentCurrency === opt.value
+                        ? "border-primary bg-primary/10 text-primary"
+                        : "border-border/70 bg-background text-muted-foreground hover:text-foreground",
+                    )}
+                  >
+                    <span>{opt.symbol}</span>
+                    <span>{opt.value}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <Label className="text-xs font-medium text-muted-foreground">
+                Açıklama Notu (Opsiyonel)
+              </Label>
+              <textarea
+                value={description}
+                onChange={(event) => {
+                  setDescription(event.target.value);
+                  setError(null);
+                }}
+                placeholder="Ek bilgi veya not"
+                rows={2}
+                className="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] resize-none"
+              />
+            </div>
+
+            {error && <p className="text-sm text-destructive">{error}</p>}
+
+            <DialogFooter className="gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => { setShowDialog(false); setError(null); }}
+              >
+                İptal
+              </Button>
+              <Button type="submit" disabled={!label.trim() || !accountId || amount <= 0}>
+                <Plus className="mr-2 size-4" />
+                Ödemeyi Planla
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
