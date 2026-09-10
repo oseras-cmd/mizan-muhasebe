@@ -424,6 +424,22 @@ export function deleteUpcomingPayment(id: string) {
   });
 }
 
+/** Ödemeyi "Şimdi Ödenecekler" kuyruğuna ekler/çıkarır (sürükle-bırak ataması). */
+export function setPaymentQueued(id: string, queued: boolean) {
+  setFinanceData({
+    ...data,
+    upcomingPayments: data.upcomingPayments.map((payment) =>
+      payment.id === id
+        ? {
+            ...payment,
+            queued,
+            queuedAt: queued ? new Date().toISOString() : undefined,
+          }
+        : payment,
+    ),
+  });
+}
+
 /** Ödemeyi tamamlar (tam veya kısmi). Kısmi ödeme yapıldığında listede kalır. Tekrarlayan ödemeler tamamlandığında bir sonraki taksidi otomatik oluşturulur. */
 export function completeUpcomingPayment(id: string, partialAmount?: number) {
   const payment = data.upcomingPayments.find((p) => p.id === id);

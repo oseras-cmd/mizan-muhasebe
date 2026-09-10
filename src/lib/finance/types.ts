@@ -78,6 +78,10 @@ export interface UpcomingPayment {
   recurringType?: RecurringType;
   /** Tekrarlanan ödemelerin ortak grubu ID'si */
   recurringGroupId?: string;
+  /** "Şimdi Ödenecekler" kuyruğuna atanmış mı (sürükle-bırak) */
+  queued?: boolean;
+  /** Kuyruğa atanma zamanı (ISO) */
+  queuedAt?: string;
   /** Bitiş tarihi (opsiyonel, belirtilmezse süresiz) */
   recurringEndDate?: string;
   /** Açıklama notu */

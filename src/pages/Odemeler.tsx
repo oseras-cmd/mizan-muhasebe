@@ -25,6 +25,7 @@ import {
   completeUpcomingPayment,
   deleteUpcomingPayment,
   getPaymentHistory,
+  setPaymentQueued,
   updateUpcomingPayment,
   useFinanceData,
 } from "@/lib/finance/store";
@@ -38,7 +39,9 @@ import {
   Check,
   Clock,
   FileText,
+  GripVertical,
   History,
+  Hand,
   Pencil,
   Plus,
   Search,
@@ -94,6 +97,8 @@ export default function Odemeler() {
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState<FilterStatus>("tumu");
   const [showDialog, setShowDialog] = useState(false);
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [dragOverQueue, setDragOverQueue] = useState(false);
 
   const overdue = overduePayments(data);
   const overdueTotal = overdue.reduce((sum, payment) => sum + payment.amount, 0);
@@ -141,6 +146,19 @@ export default function Odemeler() {
 
   const paymentCount = filteredPayments.length;
   const totalAmount = filteredPayments.reduce((sum, p) => sum + p.amount, 0);
+
+  /* "Şimdi Ödenecekler" kuyruğu — kullanıcının sürükleyip atadığı ödemeler */
+  const queuedPayments = useMemo(
+    () =>
+      data.upcomingPayments
+        .filter((p) => p.queued)
+        .sort((a, b) => (a.queuedAt ?? "").localeCompare(b.queuedAt ?? "")),
+    [data.upcomingPayments],
+  );
+  const queuedTotal = queuedPayments.reduce(
+    (sum, p) => sum + (p.amount - (p.paidAmount ?? 0)),
+    0,
+  );
 
   // Ödeme raporu için istatistikler
   const allPayments = data.upcomingPayments;
@@ -261,6 +279,28 @@ export default function Odemeler() {
 
   const handlePrintReport = () => {
     window.print();
+  };
+
+  /* --- Sürükle-bırak: kuyruk ataması --- */
+  const handleDropOnQueue = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOverQueue(false);
+    const id = e.dataTransfer.getData("text/mizan-payment");
+    if (!id) return;
+    const payment = data.upcomingPayments.find((p) => p.id === id);
+    if (!payment || payment.queued) return;
+    setPaymentQueued(id, true);
+    toast.success(`"${payment.label}" şimdi ödenecekler kuyruğuna eklendi.`);
+  };
+
+  const handleDropOnList = (e: React.DragEvent) => {
+    e.preventDefault();
+    const id = e.dataTransfer.getData("text/mizan-payment");
+    if (!id) return;
+    const payment = data.upcomingPayments.find((p) => p.id === id);
+    if (!payment || !payment.queued) return;
+    setPaymentQueued(id, false);
+    toast.success(`"${payment.label}" kuyruktan çıkarıldı.`);
   };
 
   const renderPaymentActions = (paymentId: string) => {
@@ -596,8 +636,109 @@ export default function Odemeler() {
           </p>
         </div>
 
-        {/* Ödeme Listesi — tam genişlik */}
-        <section className="mt-5 overflow-hidden rounded-lg border bg-card print:border-0">
+        {/* Şimdi Ödenecekler — sürükle-bırak kuyruğu */}
+        <section
+          onDragOver={(e) => {
+            e.preventDefault();
+            setDragOverQueue(true);
+          }}
+          onDragLeave={(e) => {
+            if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragOverQueue(false);
+          }}
+          onDrop={handleDropOnQueue}
+          className={cn(
+            "mt-5 overflow-hidden rounded-lg border-2 border-dashed transition-colors print:border-0",
+            dragOverQueue
+              ? "border-primary bg-primary/[0.04]"
+              : "border-border/70 bg-card",
+          )}
+        >
+          <header className="flex flex-wrap items-center justify-between gap-3 border-b border-border/70 px-5 py-3">
+            <div>
+              <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                <GripVertical className="size-4 text-primary" />
+                Şimdi Ödenecekler
+              </h2>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                Aşağıdaki listeden ödemeleri buraya sürükleyip bırakın; hazır olduğunuzda ödeyin.
+              </p>
+            </div>
+            {queuedPayments.length > 0 && (
+              <div className="flex items-center gap-2">
+                <span className="rounded-full bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary">
+                  {queuedPayments.length} kalem
+                </span>
+                <span className="font-mono text-sm font-semibold tabular-nums text-foreground">
+                  {formatCurrency(queuedTotal, "TRY")}
+                </span>
+              </div>
+            )}
+          </header>
+          <div
+            onDragOver={(e) => e.preventDefault()}
+            onDrop={handleDropOnList}
+            className="min-h-[52px] p-2"
+          >
+            {queuedPayments.length === 0 ? (
+              <div className="flex items-center justify-center gap-2 rounded-md px-4 py-6 text-xs text-muted-foreground/70">
+                <Plus className="size-3.5" />
+                Ödemeleri buraya sürükleyin
+              </div>
+            ) : (
+              <ul className="flex flex-wrap gap-2">
+                {queuedPayments.map((payment) => {
+                  const cur = payment.currency ?? "TRY";
+                  const remaining = payment.amount - (payment.paidAmount ?? 0);
+                  return (
+                    <li
+                      key={payment.id}
+                      draggable
+                      onDragStart={(e) => {
+                        e.dataTransfer.setData("text/mizan-payment", payment.id);
+                        e.dataTransfer.effectAllowed = "move";
+                        setDragId(payment.id);
+                      }}
+                      onDragEnd={() => setDragId(null)}
+                      className={cn(
+                        "group flex items-center gap-2.5 rounded-md border bg-background px-3 py-2 transition-shadow hover:shadow-sm",
+                        dragId === payment.id && "opacity-40",
+                      )}
+                    >
+                      <GripVertical className="size-3.5 shrink-0 cursor-grab text-muted-foreground/50 group-hover:text-muted-foreground" />
+                      <div className="min-w-0">
+                        <p className="max-w-[220px] truncate text-xs font-medium text-foreground">
+                          {payment.label}
+                        </p>
+                        <p className="text-[10px] tabular-nums text-muted-foreground">
+                          {formatCurrency(remaining, cur)}
+                          {payment.paidAmount && payment.paidAmount > 0 ? " · kısmi" : ""}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        aria-label="Kuyruktan çıkar"
+                        onClick={() => {
+                          setPaymentQueued(payment.id, false);
+                          toast.success(`"${payment.label}" kuyruktan çıkarıldı.`);
+                        }}
+                        className="ml-1 rounded p-0.5 text-muted-foreground/60 transition-colors hover:bg-destructive/10 hover:text-destructive"
+                      >
+                        <X className="size-3.5" />
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+        </section>
+
+        {/* Ödeme Listesi — tam genişlik (kuyruğa sürükleme hedefi) */}
+        <section
+          onDragOver={(e) => e.preventDefault()}
+          onDrop={handleDropOnList}
+          className="mt-5 overflow-hidden rounded-lg border bg-card print:border-0"
+        >
           <header className="flex items-center justify-between border-b border-border/70 px-5 py-3">
             <div>
               <h2 className="text-sm font-semibold text-foreground">Ödeme Listesi</h2>
@@ -658,9 +799,17 @@ export default function Odemeler() {
                     return (
                       <tr
                         key={payment.id}
+                        draggable
+                        onDragStart={(e) => {
+                          e.dataTransfer.setData("text/mizan-payment", payment.id);
+                          e.dataTransfer.effectAllowed = "move";
+                          setDragId(payment.id);
+                        }}
+                        onDragEnd={() => setDragId(null)}
                         className={cn(
-                          "border-b border-border/30 transition-colors hover:bg-muted/30",
+                          "cursor-grab border-b border-border/30 transition-colors hover:bg-muted/30 active:cursor-grabbing",
                           idx % 2 === 0 ? "bg-background" : "bg-muted/10",
+                          dragId === payment.id && "opacity-40",
                         )}
                       >
                         <td className="px-2 py-2 text-center tabular-nums text-muted-foreground">
