@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { todayIso } from "./format";
+import { formatCurrency } from "./format";
 import { getFinanceData, getTodoReminders, type TodoReminder } from "./store";
 import type { UpcomingPayment } from "./types";
 
@@ -32,6 +33,11 @@ function saveJsonSet(ids: Set<string>, storageKey: string) {
   } catch {}
 }
 
+/** Günde kaç kez hatırlatma turu yapılır (3–4) */
+export const REMINDERS_PER_DAY = 4;
+/** Turlar arası minimum bekleme (ms) — 6 saat */
+const ROUND_GAP_MS = (24 * 60 * 60 * 1000) / REMINDERS_PER_DAY; // 6h
+
 function daysSinceLastNativeNotif(): number {
   try {
     const raw = localStorage.getItem(LAST_NATIVE_NOTIF_KEY);
@@ -44,11 +50,24 @@ function daysSinceLastNativeNotif(): number {
   }
 }
 
+function hoursSinceLastNativeNotif(): number {
+  try {
+    const raw = localStorage.getItem(LAST_NATIVE_NOTIF_KEY);
+    if (!raw) return 999;
+    const last = new Date(raw);
+    const now = new Date();
+    return (now.getTime() - last.getTime()) / (1000 * 60 * 60);
+  } catch {
+    return 999;
+  }
+}
+
 function markNativeNotifSent() {
   try {
     localStorage.setItem(LAST_NATIVE_NOTIF_KEY, new Date().toISOString());
   } catch {}
 }
+
 
 /* ─── Types ─── */
 export interface PaymentReminder {
@@ -175,53 +194,100 @@ export async function requestNotificationPermission(): Promise<boolean> {
   return result === "granted";
 }
 
-/** Fire native OS notifications — max once per day */
+/** Fire native OS notifications — 3-4 rounds per day, ~6h apart.
+ *  Her tur yalnızca yeni (o gün bildirilmemiş) hatırlatmaları içerir; tümü bildirilmişse
+ *  sessiz kalır, böylece Windows bildirim ekranı dolup taşmaz.
+ */
 export function fireNativeNotifications() {
   if (!("Notification" in window)) return;
   if (Notification.permission !== "granted") return;
 
-  // Only once per day
-  if (daysSinceLastNativeNotif() < 1) return;
+  // Günde en fazla REMINDERS_PER_DAY tur; turlar arası en az 6 saat.
+  if (hoursSinceLastNativeNotif() < ROUND_GAP_MS / (1000 * 60 * 60)) return;
 
   const reminders = getActiveReminders();
+  if (reminders.length === 0) return; // Hatırlatılacak şey yoksa bildirim gönderme
+
+  // Bu turda daha önce bildirilmemiş, okunmamış hatırlatmaları topla
   const notified = getJsonSet(NOTIFIED_KEY);
   const notifiedTodo = getJsonSet(NOTIFIED_TODO_KEY);
-  let firedAny = false;
+  const today = todayIso();
 
-  for (const r of reminders) {
-    if (r.read) continue; // Don't re-notify read items
+  const fresh = reminders.filter((r) => {
+    if (r.read) return false;
+    const key = `${r.kind}-${r.id}-${today}`;
+    return r.kind === "payment" ? !notified.has(key) : !notifiedTodo.has(key);
+  });
 
-    const key = `${r.id}-${todayIso()}`;
+  if (fresh.length === 0) return; // Bu tur için yeni hatırlatma yok
 
-    if (r.kind === "payment" && !notified.has(key)) {
-      new Notification("Mizan — Ödeme Hatırlatması", {
-        body: `${r.title}: ${r.message}${r.amount ? `\nTutar: ₺${r.amount.toLocaleString("tr-TR")}` : ""}`,
-        icon: "/favicon.ico",
-        tag: key,
-      });
-      notified.add(key);
-      firedAny = true;
+  // Tek özet bildirimi gönder (Windows bildirim ekranını doldurmasın)
+  const payments = fresh.filter((r) => r.kind === "payment");
+  const tasks = fresh.filter((r) => r.kind === "task");
+  const parts: string[] = [];
+  if (payments.length > 0) parts.push(`${payments.length} ödeme`);
+  if (tasks.length > 0) parts.push(`${tasks.length} görev`);
+  const first = fresh[0];
+  const title =
+    fresh.length === 1
+      ? first.kind === "payment"
+        ? "Mizan — Ödeme Hatırlatması"
+        : "Mizan — Görev Hatırlatması"
+      : `Mizan — ${parts.join(" · ")} hatırlatması`;
+
+  let body: string;
+  if (fresh.length === 1) {
+    body = `${first.title}: ${first.message}`;
+    if (first.kind === "payment" && first.amount !== undefined) {
+      const data = getFinanceData();
+      const payment = data.upcomingPayments.find((p) => p.id === first.id);
+      body += `\nTutar: ${formatCurrency(first.amount, payment?.currency ?? "TRY")}`;
     }
-
-    if (r.kind === "task" && !notifiedTodo.has(key)) {
-      new Notification("Mizan — Görev Hatırlatması", {
-        body: `${r.title}: ${r.message}`,
-        icon: "/favicon.ico",
-        tag: key,
-      });
-      notifiedTodo.add(key);
-      firedAny = true;
-    }
+  } else {
+    body = fresh
+      .slice(0, 4)
+      .map((r) => `• ${r.title} — ${r.message}`)
+      .join("\n");
+    const extra = fresh.length - 4;
+    if (extra > 0) body += `\n+${extra} kalem daha…`;
   }
 
-  if (firedAny) {
-    saveJsonSet(notified, NOTIFIED_KEY);
-    saveJsonSet(notifiedTodo, NOTIFIED_TODO_KEY);
-    markNativeNotifSent();
+  try {
+    new Notification(title, {
+      body,
+      icon: "/favicon.ico",
+      tag: `mizan-reminder-${today}-${Date.now()}`, // her tur ayrı bildirim
+    });
+  } catch {}
+
+  // Bu turdaki tüm kalemleri 'bildirildi' işaretle
+  for (const r of fresh) {
+    const key = `${r.kind}-${r.id}-${today}`;
+    if (r.kind === "payment") notified.add(key);
+    else notifiedTodo.add(key);
   }
+  saveJsonSet(notified, NOTIFIED_KEY);
+  saveJsonSet(notifiedTodo, NOTIFIED_TODO_KEY);
+  markNativeNotifSent();
 }
 
 /* ─── Dismiss / Read / Clear ─── */
+
+/**
+ * Bildirim izni verilmemişse sessizce ister. Uygulama ilk açılışında çağrılır;
+ * tarayıcı/Electron izin penceresini gösterir, kullanıcı verirse bildirimler akmaya başlar.
+ */
+export async function ensureNotificationPermission(): Promise<boolean> {
+  if (!("Notification" in window)) return false;
+  if (Notification.permission === "granted") return true;
+  if (Notification.permission === "denied") return false;
+  try {
+    const result = await Notification.requestPermission();
+    return result === "granted";
+  } catch {
+    return false;
+  }
+}
 
 /** Dismiss a single reminder (hide from list) */
 export function dismissReminder(kind: "payment" | "task", id: string) {

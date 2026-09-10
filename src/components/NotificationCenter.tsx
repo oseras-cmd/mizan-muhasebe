@@ -9,6 +9,7 @@ import {
   markAsRead,
   markAllAsRead,
   dismissAll,
+  restoreAll,
   type CombinedReminder,
 } from "@/lib/finance/reminders";
 import { cn } from "@/lib/utils";
@@ -32,7 +33,7 @@ import {
 } from "lucide-react";
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useNavigate } from "react-router";
-import { fireNativeNotifications } from "@/lib/finance/reminders";
+import { fireNativeNotifications, ensureNotificationPermission } from "@/lib/finance/reminders";
 
 /* ─── Urgency Styling ─── */
 function urgencyBadge(urgency: CombinedReminder["urgency"]) {
@@ -93,11 +94,20 @@ export function NotificationCenter() {
   const unreadCount = activeReminders.filter((r) => !r.read).length;
   const totalCount = activeReminders.length;
 
-  // Fire native notifications on mount & every 5 min
+  // Uygulama açılışında izni sessizce iste, ardından hatırlatma turlarını başlat.
+  // fireNativeNotifications kendi içinde günde 3-4 tur limiti uygular.
   useEffect(() => {
-    fireNativeNotifications();
-    const interval = setInterval(fireNativeNotifications, 5 * 60 * 1000);
-    return () => clearInterval(interval);
+    let cancelled = false;
+    const boot = async () => {
+      await ensureNotificationPermission();
+      if (!cancelled) fireNativeNotifications();
+    };
+    boot();
+    const interval = setInterval(fireNativeNotifications, 60 * 1000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
   }, []);
 
   const filteredReminders = showDismissed
@@ -136,7 +146,6 @@ export function NotificationCenter() {
   }, []);
 
   const handleRestoreAll = useCallback(() => {
-    const { restoreAll } = require("@/lib/finance/reminders");
     restoreAll();
     setIsOpen((prev) => prev);
   }, []);
