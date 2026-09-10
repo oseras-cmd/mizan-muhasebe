@@ -1,7 +1,30 @@
-node_modules/
+# Build output
 dist/
 release/
+win-unpacked/
+
+# Dependencies
+node_modules/
+
+# Local git data (Vly manages version control)
+.git/
+
+# Environment & secrets
 .env
+.env.*
+
+# Logs
 *.log
+npm-debug.log*
+daytona-daemon.log
+
+# OS / editor
 .DS_Store
-vly-toolbar-readonly.tsx
+Thumbs.db
+
+# Old backup archives (project is on GitHub)
+*.zip
+*.tar.gz
+
+# Electron builder cache
+.cache/
