@@ -88,18 +88,27 @@ function loadFinanceData(): FinanceData {
           ...account,
           currency: account.currency ?? "TRY",
         }));
-        // Migration: eski belgelerin dataUrl'lerini ayrı depola
+        // Migration: eski belgelerin dataUrl'lerini ayrı anahtarlara taşı
         try {
-          const existingDocData = loadDocDataMap();
           let migrated = false;
           for (const doc of result.documents) {
-            if (doc.dataUrl && doc.dataUrl.length > 100 && !existingDocData[doc.id]) {
-              existingDocData[doc.id] = doc.dataUrl;
-              doc.dataUrl = "";
-              migrated = true;
+            if (
+              doc.dataUrl &&
+              doc.dataUrl.length > 100 &&
+              getDocumentDataUrl(doc.id) === null
+            ) {
+              try {
+                window.localStorage.setItem(DOC_KEY_PREFIX + doc.id, doc.dataUrl);
+                doc.dataUrl = "";
+                migrated = true;
+              } catch {
+                // Bu belge taşınamadı (kota dolu) — sonraki açılışta tekrar denenir
+              }
             }
           }
-          if (migrated) saveDocDataMap(existingDocData);
+          if (migrated) {
+            window.localStorage.setItem(STORAGE_KEY, JSON.stringify(result));
+          }
         } catch {
           // Migration hatası kritik değil
         }
@@ -152,7 +161,7 @@ export function exportFinanceData(): string {
       version: 1,
       exportedAt: new Date().toISOString(),
       data,
-      docData: getDocDataMap(),
+      docData: collectDocData(),
     },
     null,
     2,
@@ -176,8 +185,17 @@ export function importFinanceData(raw: string): boolean {
       ? (parsed as Record<string, unknown>).docData
       : undefined;
     if (imported && typeof imported === "object") {
-      docDataCache = imported as Record<string, string>;
-      saveDocDataMap(docDataCache);
+      for (const [id, value] of Object.entries(
+        imported as Record<string, string>,
+      )) {
+        if (typeof value === "string" && value) {
+          try {
+            window.localStorage.setItem(DOC_KEY_PREFIX + id, value);
+          } catch {
+            // Depolama dolu — bu belge atlandı
+          }
+        }
+      }
     }
     return true;
   } catch {
@@ -1072,46 +1090,78 @@ export function deleteBudgetTarget(id: string) {
 /** localStorage kapasitesi nedeniyle dosya başına üst sınır (bayt) */
 export const MAX_DOCUMENT_SIZE = 2 * 1024 * 1024; // 2 MB
 
-/** Belge base64 verileri ayrı depolanır — ana state'i şişirmez */
+/** Belge base64 verileri ana state'i şişirmemesi için ayrı tutulur.
+ *  Her belge kendi localStorage anahtarında saklanır: kaydetme sırasında yalnızca
+ *  o belge yazılır, tüm haritanın yeniden yazılması/arayüzün donması olmaz. */
+const DOC_KEY_PREFIX = "mizan-doc-";
+/** Eski sürüm: tüm belgeler tek JSON anahtarındaydı (geriye dönük okuma için). */
 const DOC_DATA_KEY = "mizan-doc-data-v1";
 
-function loadDocDataMap(): Record<string, string> {
+function loadLegacyDocDataMap(): Record<string, string> {
   try {
     const raw = window.localStorage.getItem(DOC_DATA_KEY);
-    return raw ? JSON.parse(raw) : {};
+    return raw ? (JSON.parse(raw) as Record<string, string>) : {};
   } catch {
     return {};
   }
 }
 
-function saveDocDataMap(map: Record<string, string>) {
-  window.localStorage.setItem(DOC_DATA_KEY, JSON.stringify(map));
-}
-
-let docDataCache: Record<string, string> | null = null;
-
-function getDocDataMap(): Record<string, string> {
-  if (!docDataCache) docDataCache = loadDocDataMap();
-  return docDataCache;
-}
-
 /** Belge base64 verisini yükle (lazy) */
 export function getDocumentDataUrl(id: string): string | null {
-  return getDocDataMap()[id] ?? null;
+  try {
+    const direct = window.localStorage.getItem(DOC_KEY_PREFIX + id);
+    if (direct) return direct;
+  } catch {
+    // ignore
+  }
+  return loadLegacyDocDataMap()[id] ?? null;
 }
 
-/** Belge base64 verisini kaydet */
+/** Belge base64 verisini kaydet. Depolama doluysa hata fırlatır. */
 function setDocumentDataUrl(id: string, dataUrl: string) {
-  const map = getDocDataMap();
-  map[id] = dataUrl;
-  saveDocDataMap(map);
+  try {
+    window.localStorage.setItem(DOC_KEY_PREFIX + id, dataUrl);
+  } catch {
+    throw new Error("DOC_STORAGE_FULL");
+  }
 }
 
 /** Belge base64 verisini sil */
 function removeDocumentDataUrl(id: string) {
-  const map = getDocDataMap();
-  delete map[id];
-  saveDocDataMap(map);
+  try {
+    window.localStorage.removeItem(DOC_KEY_PREFIX + id);
+  } catch {
+    // ignore
+  }
+  try {
+    const legacy = loadLegacyDocDataMap();
+    if (id in legacy) {
+      delete legacy[id];
+      window.localStorage.setItem(DOC_DATA_KEY, JSON.stringify(legacy));
+    }
+  } catch {
+    // ignore
+  }
+}
+
+/** Dışa aktarma için tüm belge verilerini toplar. */
+export function collectDocData(): Record<string, string> {
+  const out: Record<string, string> = {};
+  try {
+    for (let i = 0; i < window.localStorage.length; i++) {
+      const key = window.localStorage.key(i);
+      if (key && key.startsWith(DOC_KEY_PREFIX)) {
+        const value = window.localStorage.getItem(key);
+        if (value) out[key.slice(DOC_KEY_PREFIX.length)] = value;
+      }
+    }
+  } catch {
+    // ignore
+  }
+  for (const [id, value] of Object.entries(loadLegacyDocDataMap())) {
+    if (!(id in out)) out[id] = value;
+  }
+  return out;
 }
 
 export interface NewDocumentInput {
@@ -1125,6 +1175,7 @@ export interface NewDocumentInput {
   dataUrl: string;
 }
 
+/** Belgeyi kaydeder; depolama doluysa hata fırlatır. */
 export function addDocument(input: NewDocumentInput): StoredDocument {
   const doc: StoredDocument = {
     id: newId("doc"),
@@ -1138,7 +1189,7 @@ export function addDocument(input: NewDocumentInput): StoredDocument {
     dataUrl: input.dataUrl,
     uploadedAt: new Date().toISOString(),
   };
-  // base64 verisini ayrı depola, ana state'e koyma
+  // base64 verisini ayrı anahtara yaz (başarısızsa belge hiç eklenmez)
   setDocumentDataUrl(doc.id, input.dataUrl);
   const docMeta = { ...doc, dataUrl: "" };
   setFinanceData({ ...data, documents: [docMeta, ...data.documents] });

@@ -29,7 +29,7 @@ import {
   Upload,
   X,
 } from "lucide-react";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 function formatBytes(bytes: number): string {
@@ -60,21 +60,52 @@ const emptyForm: FormState = {
   note: "",
 };
 
+/** Dosyayı data URL'e çevirir; büyük dosyalarda arayüzü bloklamaz. */
+function readFileAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = () => reject(new Error("Dosya okunamadı"));
+    reader.readAsDataURL(file);
+  });
+}
+
+/** data:application/pdf;base64,... gibi bir URL'i Blob'a çevirir. */
+function dataUrlToBlob(dataUrl: string): Blob | null {
+  try {
+    const match = /^data:([^;,]+)?(;base64)?,(.*)$/s.exec(dataUrl);
+    if (!match) return null;
+    const mime = match[1] || "application/octet-stream";
+    if (match[2]) {
+      const binary = atob(match[3]);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+      return new Blob([bytes], { type: mime });
+    }
+    return new Blob([decodeURIComponent(match[3])], { type: mime });
+  } catch {
+    return null;
+  }
+}
+
 export default function Belgeler() {
   const data = useFinanceData();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [form, setForm] = useState<FormState>(emptyForm);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [selectedFileData, setSelectedFileData] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<string>("hepsi");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<FormState>(emptyForm);
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
 
   // Önizleme modalı
   const [previewDoc, setPreviewDoc] = useState<StoredDocument | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewBlobUrl, setPreviewBlobUrl] = useState<string | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
 
   const contactName = useCallback(
@@ -102,7 +133,10 @@ export default function Belgeler() {
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0] ?? null;
-    if (file && file.size > MAX_DOCUMENT_SIZE) {
+    setSelectedFile(null);
+    setSelectedFileData(null);
+    if (!file) return;
+    if (file.size > MAX_DOCUMENT_SIZE) {
       toast.error(
         `Dosya çok büyük (${formatBytes(file.size)}). En fazla ${formatBytes(MAX_DOCUMENT_SIZE)} yüklenebilir.`,
       );
@@ -110,17 +144,29 @@ export default function Belgeler() {
       return;
     }
     setSelectedFile(file);
-    if (file && !form.name.trim()) {
+    if (!form.name.trim()) {
       setForm((prev) => ({
         ...prev,
         name: file.name.replace(/\.[^.]+$/, ""),
       }));
     }
+    // Dosyayı hemen arka planda oku — kullanıcı kaydet dediğinde bekleme olmasın
+    readFileAsDataUrl(file)
+      .then((dataUrl) => {
+        setSelectedFileData(dataUrl);
+      })
+      .catch(() => {
+        toast.error("Dosya okunamadı. Lütfen tekrar seçin.");
+        setSelectedFile(null);
+        setSelectedFileData(null);
+        if (fileInputRef.current) fileInputRef.current.value = "";
+      });
   };
 
   const resetUploadForm = () => {
     setForm(emptyForm);
     setSelectedFile(null);
+    setSelectedFileData(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
@@ -129,13 +175,9 @@ export default function Belgeler() {
       toast.error("Lütfen bir dosya seçin.");
       return;
     }
+    setUploading(true);
     try {
-      const dataUrl = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result as string);
-        reader.onerror = () => reject(new Error("Dosya okunamadı"));
-        reader.readAsDataURL(selectedFile);
-      });
+      const dataUrl = selectedFileData ?? (await readFileAsDataUrl(selectedFile));
       addDocument({
         name: form.name || selectedFile.name,
         category: form.category,
@@ -148,8 +190,16 @@ export default function Belgeler() {
       });
       toast.success("Belge kaydedildi.");
       resetUploadForm();
-    } catch {
-      toast.error("Dosya okunamadı. Lütfen tekrar deneyin.");
+    } catch (error) {
+      if (error instanceof Error && error.message === "DOC_STORAGE_FULL") {
+        toast.error(
+          "Tarayıcı depolaması dolu. Daha küçük bir dosya deneyin veya eski belgeleri silin.",
+        );
+      } else {
+        toast.error("Dosya okunamadı. Lütfen tekrar deneyin.");
+      }
+    } finally {
+      setUploading(false);
     }
   };
 
@@ -192,18 +242,42 @@ export default function Belgeler() {
   const viewDoc = (doc: StoredDocument) => {
     setPreviewDoc(doc);
     setPreviewLoading(true);
-    // Lazy yükle
-    setTimeout(() => {
-      const url = getDocumentDataUrl(doc.id);
-      setPreviewUrl(url);
+    // Lazy yükle: büyük belgelerde listeyi bloklamadan veriyi çek
+    window.setTimeout(() => {
+      const dataUrl = getDocumentDataUrl(doc.id);
+      setPreviewUrl(dataUrl);
       setPreviewLoading(false);
     }, 50);
   };
 
   const closePreview = () => {
     setPreviewDoc(null);
-    setPreviewUrl(null);
   };
+
+  // data: URL'i Chromium iframe'lerinde PDF olarak gösterilmediği için
+  // blob: URL'ine çevir (PDF önizlemesi için gerekli)
+  useEffect(() => {
+    if (!previewUrl) return;
+    const blob = dataUrlToBlob(previewUrl);
+    if (!blob) return;
+    const objectUrl = URL.createObjectURL(blob);
+    setPreviewBlobUrl(objectUrl);
+    return () => {
+      URL.revokeObjectURL(objectUrl);
+    };
+  }, [previewUrl]);
+
+  const displayPreviewUrl = previewBlobUrl ?? previewUrl;
+
+  // ESC ile önizlemeyi kapat
+  useEffect(() => {
+    if (!previewDoc) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") closePreview();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [previewDoc]);
 
   return (
     <div className="min-h-screen bg-background pl-64 text-foreground">
@@ -318,9 +392,22 @@ export default function Belgeler() {
             </div>
           </div>
           <div className="mt-4 flex justify-end">
-            <Button type="button" onClick={handleUpload} disabled={!selectedFile}>
-              <Upload className="size-4" />
-              Belgeyi Kaydet
+            <Button
+              type="button"
+              onClick={handleUpload}
+              disabled={!selectedFile || uploading}
+            >
+              {uploading ? (
+                <>
+                  <span className="size-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                  Kaydediliyor…
+                </>
+              ) : (
+                <>
+                  <Upload className="size-4" />
+                  Belgeyi Kaydet
+                </>
+              )}
             </Button>
           </div>
         </section>
@@ -619,16 +706,16 @@ export default function Belgeler() {
                   <div className="size-6 animate-spin rounded-full border-2 border-current border-t-transparent" />
                   <span className="text-xs">Yükleniyor...</span>
                 </div>
-              ) : previewUrl ? (
+              ) : displayPreviewUrl ? (
                 isPdf(previewDoc) ? (
                   <iframe
-                    src={previewUrl}
+                    src={displayPreviewUrl}
                     className="h-[80vh] w-full border-0"
                     title={previewDoc.name}
                   />
                 ) : isImage(previewDoc) ? (
                   <img
-                    src={previewUrl}
+                    src={displayPreviewUrl}
                     alt={previewDoc.name}
                     className="max-h-[80vh] max-w-full object-contain"
                   />
@@ -643,7 +730,7 @@ export default function Belgeler() {
                       size="sm"
                       onClick={() => {
                         const link = document.createElement("a");
-                        link.href = previewUrl;
+                        link.href = displayPreviewUrl;
                         link.download = previewDoc.fileName;
                         document.body.appendChild(link);
                         link.click();
