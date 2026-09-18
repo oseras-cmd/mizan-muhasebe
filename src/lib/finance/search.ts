@@ -94,7 +94,7 @@ export function useGlobalSearch() {
           id: a.id,
           title: a.name,
           subtitle: `Bakiye: ₺${a.balance.toLocaleString("tr-TR")}`,
-          url: "/kasa-banka",
+          url: "/odeme-gecmisi",
         });
       }
     }
