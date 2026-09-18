@@ -33,6 +33,7 @@ import { type RecurringType, type PaymentCurrency, PAYMENT_CURRENCY_OPTIONS, REC
 import { cn } from "@/lib/utils";
 import {
   AlertTriangle,
+  ArrowRight,
   CalendarClock,
   CalendarDays,
   CalendarRange,
@@ -100,6 +101,9 @@ export default function Odemeler() {
   const [dragId, setDragId] = useState<string | null>(null);
   const [dragOverQueue, setDragOverQueue] = useState(false);
 
+  /* Elindeki para hesabı */
+  const [cashOnHand, setCashOnHand] = useState(0);
+
   const overdue = overduePayments(data);
   const overdueTotal = overdue.reduce((sum, payment) => sum + payment.amount, 0);
 
@@ -166,6 +170,10 @@ export default function Odemeler() {
   const totalPaid = allPayments.reduce((sum, p) => sum + (p.paidAmount ?? 0), 0);
   const fullyPaidCount = allPayments.filter((p) => (p.paidAmount ?? 0) >= p.amount).length;
   const partialCount = allPayments.filter((p) => (p.paidAmount ?? 0) > 0 && (p.paidAmount ?? 0) < p.amount).length;
+
+  /* Elindeki para hesabı: bekleyen ödemeler toplamından düşülür */
+  const afterPayments = cashOnHand - totalPending;
+  const needMore = afterPayments < 0;
 
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -635,6 +643,60 @@ export default function Odemeler() {
             Tutar: {formatTRY(totalAmount)}
           </p>
         </div>
+
+        {/* Elindeki Para hesabı — bekleyen ödemelerden düşer */}
+        <section className="mt-5 overflow-hidden rounded-lg border bg-card print:hidden">
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-3 px-5 py-4">
+            <div className="flex min-w-[180px] flex-col gap-1">
+              <span className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                <Coins className="size-3.5" />
+                Elindeki Para
+              </span>
+              <FormattedInput
+                value={cashOnHand}
+                onChange={setCashOnHand}
+                placeholder="0,00"
+                className="h-9 w-40"
+              />
+            </div>
+            <div className="hidden h-10 w-px bg-border sm:block" />
+            <div className="flex flex-wrap items-center gap-6">
+              <div>
+                <p className="text-[11px] text-muted-foreground">Bekleyen Ödemeler</p>
+                <p className="font-mono text-sm font-semibold tabular-nums text-orange-600">
+                  {formatTRY(totalPending)}
+                </p>
+              </div>
+              <ArrowRight className="size-4 shrink-0 text-muted-foreground/50" />
+              <div>
+                <p className="text-[11px] text-muted-foreground">
+                  {needMore ? "Eksik Para" : "Kalan"}
+                </p>
+                <p
+                  className={cn(
+                    "font-mono text-sm font-semibold tabular-nums",
+                    needMore ? "text-destructive" : "text-emerald-600",
+                  )}
+                >
+                  {needMore ? "−" : "+"}
+                  {formatTRY(Math.abs(afterPayments))}
+                </p>
+              </div>
+              <span
+                className={cn(
+                  "rounded-md px-2.5 py-1.5 text-xs font-semibold",
+                  needMore
+                    ? "bg-destructive/10 text-destructive"
+                    : "bg-emerald-500/10 text-emerald-600",
+                )}
+              >
+                {needMore
+                  ? `${formatTRY(Math.abs(afterPayments))} paraya ihtiyacın var`
+                  : "Tüm ödemeleri karşılayabilirsin"}
+              </span>
+            </div>
+          </div>
+        </section>
 
         {/* Şimdi Ödenecekler — sürükle-bırak kuyruğu */}
         <section
