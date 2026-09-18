@@ -19,7 +19,7 @@ const Landing = lazy(() => import("./pages/Landing.tsx"));
 const AuthPage = lazy(() => import("./pages/Auth.tsx"));
 const Dashboard = lazy(() => import("./pages/Dashboard.tsx"));
 const Odemeler = lazy(() => import("./pages/Odemeler.tsx"));
-const KasaBanka = lazy(() => import("./pages/KasaBanka.tsx"));
+const OdemeGecmisi = lazy(() => import("./pages/OdemeGecmisi.tsx"));
 const Rapor = lazy(() => import("./pages/Rapor.tsx"));
 const Hesaplayicilar = lazy(() => import("./pages/Hesaplayicilar.tsx"));
 const Gorevler = lazy(() => import("./pages/Gorevler.tsx"));
@@ -155,10 +155,10 @@ createRoot(document.getElementById("root")!).render(
               />
 
               <Route
-                path="/kasa-banka"
+                path="/odeme-gecmisi"
                 element={
                   <RequireAuth>
-                    <KasaBanka />
+                    <OdemeGecmisi />
                   </RequireAuth>
                 }
               />
