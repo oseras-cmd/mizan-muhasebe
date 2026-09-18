@@ -35,6 +35,7 @@ import {
   exportTransactionsCSV,
   exportAccountsCSV,
 } from "@/lib/finance/csvExport";
+import { exportAllExcel } from "@/lib/finance/excelExport";
 
 const navGroups = [
   {
@@ -74,6 +75,7 @@ export function AppHeader() {
   const [isDark, setIsDark] = useState(() => getResolvedTheme() === "dark");
   const [showSearch, setShowSearch] = useState(false);
   const [showExport, setShowExport] = useState(false);
+  const [activeResult, setActiveResult] = useState(0);
   const searchRef = useRef<HTMLInputElement>(null);
   const { query, setQuery, results } = useGlobalSearch();
 
@@ -85,6 +87,37 @@ export function AppHeader() {
 
   const openSearch = useCallback(() => setShowSearch(true), []);
 
+  const closeSearch = useCallback(() => {
+    setShowSearch(false);
+    setQuery("");
+  }, [setQuery]);
+
+  /** Ctrl+K modalinin klavye navigasyonu: ↑/↓ ile seç, Enter ile aç, Esc ile kapat */
+  const handleSearchKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLInputElement>) => {
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setActiveResult((prev) => (results.length === 0 ? 0 : (prev + 1) % results.length));
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setActiveResult((prev) =>
+          results.length === 0 ? 0 : (prev - 1 + results.length) % results.length,
+        );
+      } else if (e.key === "Enter") {
+        e.preventDefault();
+        const r = results[activeResult];
+        if (r) {
+          navigate(r.url);
+          closeSearch();
+        }
+      } else if (e.key === "Escape") {
+        e.preventDefault();
+        closeSearch();
+      }
+    },
+    [results, activeResult, navigate, closeSearch],
+  );
+
   useKeyboardShortcuts({
     onSearch: openSearch,
     onToggleTheme: toggleTheme,
@@ -95,6 +128,11 @@ export function AppHeader() {
       searchRef.current.focus();
     }
   }, [showSearch]);
+
+  // Sorgu değişince seçili sonucu sıfırla
+  useEffect(() => {
+    setActiveResult(0);
+  }, [query]);
 
   const handleSignOut = async () => {
     await signOut();
@@ -119,6 +157,11 @@ export function AppHeader() {
       case "accounts":
         exportAccountsCSV(data.accounts);
         break;
+      case "excel":
+        exportAllExcel(data);
+        toast.dismiss();
+        toast.success("Excel dosyası indirildi — tüm sayfalar.");
+        return;
     }
     toast.success("CSV dosyası indirildi.");
   };
@@ -248,6 +291,7 @@ export function AppHeader() {
                       { kind: "payments", label: "Ödemeler" },
                       { kind: "todos", label: "Görevler" },
                       { kind: "accounts", label: "Hesaplar" },
+                      { kind: "excel", label: "Tümü (Excel)" },
                     ].map((item) => (
                       <button
                         key={item.kind}
@@ -283,18 +327,23 @@ export function AppHeader() {
                 className="flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
+                onKeyDown={handleSearchKeyDown}
               />
-              <Button type="button" variant="ghost" size="icon" className="size-6" onClick={() => { setShowSearch(false); setQuery(""); }}>
+              <Button type="button" variant="ghost" size="icon" className="size-6" onClick={closeSearch}>
                 <X className="size-3.5" />
               </Button>
             </div>
             {results.length > 0 && (
               <ul className="max-h-72 overflow-y-auto p-1">
-                {results.map((r) => (
+                {results.map((r, idx) => (
                   <li key={`${r.kind}-${r.id}`}>
                     <button
                       type="button"
-                      className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-left text-sm hover:bg-muted"
+                      className={cn(
+                        "flex w-full items-center gap-3 rounded-md px-3 py-2 text-left text-sm",
+                        idx === activeResult ? "bg-muted" : "hover:bg-muted",
+                      )}
+                      onMouseEnter={() => setActiveResult(idx)}
                       onClick={() => { navigate(r.url); setShowSearch(false); setQuery(""); }}
                     >
                       <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground">
@@ -317,7 +366,9 @@ export function AppHeader() {
             {!query && (
               <div className="px-4 py-6 text-center">
                 <p className="text-xs text-muted-foreground">Aramak istediğiniz terimi yazın</p>
-                <p className="mt-1 text-[10px] text-muted-foreground/60">Klavye kısayolu: Ctrl+F</p>
+                <p className="mt-1 text-[10px] text-muted-foreground/60">
+                  Klavye kısayolu: Ctrl+K veya Ctrl+F · ↑↓ gezin · Enter aç · Esc kapat
+                </p>
               </div>
             )}
           </div>

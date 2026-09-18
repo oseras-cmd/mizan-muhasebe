@@ -17,6 +17,7 @@ import {
 } from "@/lib/finance/format";
 import {
   addAccount,
+  addTransaction,
   addTransfer,
   deleteAccount,
   deleteTransaction,
@@ -31,14 +32,17 @@ import {
   ArrowRightLeft,
   Banknote,
   Check,
+  FileUp,
   Landmark,
   Pencil,
   Plus,
   Trash2,
+  Upload,
   Wallet,
   X,
 } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { parseStatementFile, type StatementRow } from "@/lib/finance/statementImport";
 import { toast } from "sonner";
 
 interface AccountFormState {
@@ -73,6 +77,13 @@ export default function KasaBanka() {
   const [date, setDate] = useState(todayIso);
   const [note, setNote] = useState("");
   const [transferError, setTransferError] = useState<string | null>(null);
+
+  /* Ekstre içe aktarma */
+  const statementInputRef = useRef<HTMLInputElement>(null);
+  const [statementAccountId, setStatementAccountId] = useState("");
+  const [importingStatement, setImportingStatement] = useState(false);
+  const [importedRows, setImportedRows] = useState<StatementRow[] | null>(null);
+  const [importError, setImportError] = useState<string | null>(null);
 
   /* Hesap dökümü */
   const [ledgerAccountId, setLedgerAccountId] = useState("");
@@ -206,6 +217,57 @@ export default function KasaBanka() {
     toast.success(`${formatTRY(amount)} aktarıldı.`);
     setAmount(0);
     setNote("");
+  };
+
+  /* ─── Banka ekstresi içe aktarma ─── */
+  const handleStatementFile = async (file: File) => {
+    setImportingStatement(true);
+    setImportError(null);
+    setImportedRows(null);
+    try {
+      const result = await parseStatementFile(file);
+      if (result.error) {
+        setImportError(result.error);
+        toast.error(result.error);
+      } else {
+        setImportedRows(result.rows);
+        toast.success(`${result.rows.length} satır okundu — hesabı seçip içe aktarın.`);
+      }
+    } catch {
+      setImportError("Dosya okunamadı.");
+      toast.error("Dosya okunamadı.");
+    } finally {
+      setImportingStatement(false);
+    }
+  };
+
+  const confirmImportStatement = () => {
+    if (!importedRows || importedRows.length === 0) return;
+    if (!statementAccountId) {
+      toast.error("Önce hesap seçin.");
+      return;
+    }
+    const account = data.accounts.find((a) => a.id === statementAccountId);
+    if (!account) {
+      toast.error("Hesap bulunamadı.");
+      return;
+    }
+    for (const row of importedRows) {
+      addTransaction({
+        type: row.amount >= 0 ? "gelir" : "gider",
+        description: row.description || "Banka ekstresi",
+        category: row.amount >= 0 ? "Tahsilat" : "Ödeme",
+        accountId: statementAccountId,
+        amount: Math.abs(row.amount),
+        date: row.date,
+      });
+    }
+    toast.success(
+      `${importedRows.length} işlem "${account.name}" hesabına eklendi.`,
+    );
+    setImportedRows(null);
+    setImportError(null);
+    setStatementAccountId("");
   };
 
   return (
@@ -693,6 +755,125 @@ export default function KasaBanka() {
             </section>
           </div>
         </div>
+
+        {/* Banka ekstresi içe aktarma */}
+        <section className="mt-6 rounded-lg border bg-card">
+          <header className="flex flex-wrap items-center justify-between gap-4 border-b border-border/70 px-5 py-4">
+            <div>
+              <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                <FileUp className="size-4" />
+                Banka Ekstresi İçe Aktar
+              </h2>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                CSV veya Excel ekstreyi yükleyin — tarih, açıklama ve tutar otomatik
+                algılanır (Türk bankaları: ; veya , ayraç, 1.234,56 / 1.234,56- tutar)
+              </p>
+            </div>
+            <input
+              ref={statementInputRef}
+              type="file"
+              accept=".csv,.txt,.xlsx,.xls"
+              className="hidden"
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                if (file) void handleStatementFile(file);
+                event.target.value = "";
+              }}
+            />
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={importingStatement}
+              onClick={() => statementInputRef.current?.click()}
+            >
+              <Upload className="mr-2 size-3.5" />
+              {importingStatement ? "Okunuyor…" : "Dosya Seç"}
+            </Button>
+          </header>
+
+          {importError && (
+            <p className="border-b border-destructive/20 bg-destructive/[0.05] px-5 py-3 text-xs text-destructive">
+              {importError}
+            </p>
+          )}
+
+          {importedRows && importedRows.length > 0 && (
+            <div className="border-b border-border/70">
+              <div className="flex flex-wrap items-end justify-between gap-3 px-5 py-4">
+                <div className="flex flex-col gap-1.5">
+                  <Label className="text-xs font-medium text-muted-foreground">
+                    İşlemlerin ekleneceği hesap
+                  </Label>
+                  <select
+                    value={statementAccountId}
+                    onChange={(event) => setStatementAccountId(event.target.value)}
+                    className="h-9 w-72 rounded-md border border-input bg-transparent px-3 text-sm outline-none focus-visible:border-ring"
+                  >
+                    <option value="">Hesap seçin</option>
+                    {data.accounts.map((account) => (
+                      <option key={account.id} value={account.id}>
+                        {account.name} ({account.currency ?? "TRY"})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setImportedRows(null);
+                      setImportError(null);
+                    }}
+                  >
+                    Vazgeç
+                  </Button>
+                  <Button type="button" size="sm" onClick={confirmImportStatement}>
+                    <Check className="mr-1.5 size-3.5" />
+                    {importedRows.length} işlemi içe aktar
+                  </Button>
+                </div>
+              </div>
+              <div className="max-h-64 overflow-y-auto border-t border-border/70">
+                <table className="w-full text-xs">
+                  <thead className="sticky top-0 bg-card">
+                    <tr className="border-b border-border/70 text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                      <th className="px-5 py-2">Tarih</th>
+                      <th className="px-5 py-2">Açıklama</th>
+                      <th className="px-5 py-2 text-right">Tutar</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {importedRows.slice(0, 100).map((row, i) => (
+                      <tr key={`${row.date}-${i}`} className="border-b border-border/30">
+                        <td className="px-5 py-1.5 tabular-nums text-muted-foreground">{row.date}</td>
+                        <td className="max-w-[320px] truncate px-5 py-1.5 text-foreground">
+                          {row.description || "—"}
+                        </td>
+                        <td
+                          className={cn(
+                            "px-5 py-1.5 text-right font-mono tabular-nums",
+                            row.amount >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400",
+                          )}
+                        >
+                          {row.amount >= 0 ? "+" : "−"}
+                          {formatTRY(Math.abs(row.amount))}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {importedRows.length > 100 && (
+                  <p className="px-5 py-2 text-[11px] text-muted-foreground">
+                    İlk 100 satır gösteriliyor — içe aktarımda tümü ({importedRows.length}) eklenecek.
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
+        </section>
 
         {/* Hesap dökümü (ekstre) */}
         <section id="hesap-dokumu" className="mt-6 rounded-lg border bg-card">

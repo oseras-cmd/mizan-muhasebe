@@ -10,6 +10,7 @@ import { MaliyetHesap } from "@/components/calculators/MaliyetHesap";
 import { TiftikMaliyet } from "@/components/calculators/TiftikMaliyet";
 import { MesaiHesap } from "@/components/calculators/MesaiHesap";
 import { MasrafHesap } from "@/components/calculators/MasrafHesap";
+import { KdvBeyannameHesap } from "@/components/calculators/KdvBeyannameHesap";
 import { formatNumber } from "@/components/calculators/shared";
 import { type RateCurrency, type ExchangeRates } from "@/lib/finance/rates";
 import { useTcmbRates } from "@/lib/finance/tcmbRates";
@@ -20,6 +21,7 @@ import {
   Building2,
   CalendarRange,
   Clock,
+  FileSpreadsheet,
   FileText,
   Layers,
   Percent,
@@ -34,6 +36,7 @@ const TABS = [
   { id: "kurfarki", label: "İki Tarih Arası Kur", icon: CalendarRange },
   { id: "police", label: "Poliçe Gider", icon: ShieldCheck },
   { id: "kdv", label: "KDV", icon: Percent },
+  { id: "kdvbeyanname", label: "KDV Beyanname", icon: FileSpreadsheet },
   { id: "tevkifat", label: "Tevkifat", icon: FileText },
   { id: "stopaj", label: "Stopaj", icon: Building2 },
   { id: "maliyet", label: "Maliyet", icon: Boxes },
@@ -165,6 +168,7 @@ export default function Hesaplayicilar() {
           {active === "kurfarki" && <KurFarki />}
           {active === "police" && <PoliceGider />}
           {active === "kdv" && <KdvHesap />}
+          {active === "kdvbeyanname" && <KdvBeyannameHesap />}
           {active === "tevkifat" && <TevkifatHesap />}          { active === "stopaj" && <StopajHesap /> }
           { active === "maliyet" && <MaliyetHesap /> }
           { active === "tiftik" && (

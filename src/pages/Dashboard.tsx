@@ -27,6 +27,7 @@ import {
   formatTRY,
 } from "@/lib/finance/format";
 import { addTransaction, useFinanceData } from "@/lib/finance/store";
+import { buildCashflowProjection } from "@/lib/finance/cashflow";
 import { useTcmbRates, POPULAR_CODES, CURRENCY_SYMBOLS, rateChange } from "@/lib/finance/tcmbRates";
 import { cn } from "@/lib/utils";
 import type { TransactionCategory } from "@/lib/finance/types";
@@ -50,12 +51,12 @@ import {
   Wallet,
   Zap,
 } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router";
 import { toast } from "sonner";
 
 const CATEGORY_OPTIONS: TransactionCategory[] = ["Satış", "Hizmet", "Tahsilat", "Maaş", "Kira", "Fatura", "Vergi", "Malzeme", "Ulaşım", "Ödeme", "Diğer"];
-import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts";
+import { Area, AreaChart, Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts";
 
 const chartConfig = {
   gelir: {
@@ -128,6 +129,134 @@ function KpiCard({ label, value, caption, icon, tone = "default" }: KpiCardProps
         <p className="mt-1 text-xs text-muted-foreground">{caption}</p>
       </div>
     </div>
+  );
+}
+
+function CashflowSection() {
+  const data = useFinanceData();
+  const projection = useMemo(() => buildCashflowProjection(data, 30), [data]);
+  const chartData = projection.points;
+  const min = Math.min(...chartData.map((p) => p.balance), 0);
+  const max = Math.max(...chartData.map((p) => p.balance), 1);
+
+  const cashflowConfig = {
+    balance: {
+      label: "Tahmini Kasa",
+      color: "oklch(0.55 0.13 165)",
+    },
+  } satisfies ChartConfig;
+
+  return (
+    <section className="mt-6 rounded-xl border border-border/70 bg-card p-5 card-shadow transition-shadow duration-200 hover:card-shadow-lg sm:p-6">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h2 className="text-sm font-semibold text-foreground">
+            Nakit Akış Projeksiyonu
+          </h2>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            Önümüzdeki 30 gün — planlı ödemeler ve gelir tahminine göre
+          </p>
+        </div>
+        <div className="flex items-center gap-4 text-xs">
+          <span className="text-muted-foreground">
+            Gün sonu:{" "}
+            <span className="font-mono font-semibold tabular-nums text-foreground">
+              {formatTRY(projection.endBalance)}
+            </span>
+          </span>
+          <span className="text-muted-foreground">
+            En düşük:{" "}
+            <span
+              className={cn(
+                "font-mono font-semibold tabular-nums",
+                projection.hasShortfall ? "text-destructive" : "text-foreground",
+              )}
+            >
+              {formatTRY(projection.minBalance)}
+            </span>
+          </span>
+        </div>
+      </div>
+
+      {projection.hasShortfall && (
+        <div className="mt-4 flex items-start gap-2.5 rounded-lg border border-destructive/30 bg-destructive/[0.05] px-4 py-3">
+          <AlertTriangle className="mt-0.5 size-4 shrink-0 text-destructive" />
+          <p className="text-xs text-foreground">
+            <strong>Nakit açığı riski:</strong> projeksiyonda kasa
+            {projection.minBalanceDate ? ` ${new Date(projection.minBalanceDate).toLocaleDateString("tr-TR")}` : ""} tarihinde{" "}
+            <span className="font-mono tabular-nums">{formatTRY(projection.minBalance)}</span>
+            seviyesine düşüyor — çıkışları yeniden planlayın.
+          </p>
+        </div>
+      )}
+
+      <ChartContainer config={cashflowConfig} className="mt-5 h-56 w-full">
+        <AreaChart data={chartData} margin={{ top: 8, right: 8, bottom: 0, left: 8 }}>
+          <defs>
+            <linearGradient id="cashflowFill" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="var(--color-balance)" stopOpacity={0.25} />
+              <stop offset="100%" stopColor="var(--color-balance)" stopOpacity={0.02} />
+            </linearGradient>
+          </defs>
+          <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="var(--border)" />
+          <XAxis
+            dataKey="label"
+            axisLine={false}
+            tickLine={false}
+            tick={{ fill: "var(--muted-foreground)", fontSize: 10 }}
+            interval={4}
+            dy={6}
+          />
+          <YAxis
+            hide
+            domain={[Math.floor(min * 1.05), Math.ceil(max * 1.05)]}
+          />
+          <ChartTooltip
+            cursor={{ stroke: "var(--muted-foreground)", strokeOpacity: 0.3 }}
+            content={
+              <ChartTooltipContent
+                labelFormatter={(label) => (
+                  <span className="font-medium text-foreground">{label}</span>
+                )}
+                formatter={(value, _name, item) => {
+                  const p = item?.payload as { incoming?: number; outgoing?: number } | undefined;
+                  return (
+                    <div className="w-full space-y-1">
+                      <div className="flex items-center justify-between gap-8">
+                        <span className="text-muted-foreground">Tahmini Kasa</span>
+                        <span className="font-mono tabular-nums text-foreground">
+                          {formatTRY(Number(value))}
+                        </span>
+                      </div>
+                      {p && (
+                        <div className="flex items-center justify-between gap-8 text-[11px]">
+                          <span className="text-muted-foreground">Giriş / Çıkış</span>
+                          <span className="font-mono tabular-nums text-muted-foreground">
+                            +{formatTRY(p.incoming ?? 0)} / −{formatTRY(p.outgoing ?? 0)}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  );
+                }}
+              />
+            }
+          />
+          <Area
+            type="monotone"
+            dataKey="balance"
+            stroke="var(--color-balance)"
+            strokeWidth={2}
+            fill="url(#cashflowFill)"
+            dot={false}
+          />
+        </AreaChart>
+      </ChartContainer>
+      <p className="mt-3 text-[11px] leading-4 text-muted-foreground">
+        Projeksiyon; mevcut kasa bakiyesi, planlı ödemelerin kalan tutarları,
+        son 90 günün ortalama günlük geliri ve bugünün işlemlerine dayanır.
+      </p>
+    </section>
   );
 }
 
@@ -556,6 +685,9 @@ export default function Dashboard() {
             </BarChart>
           </ChartContainer>
         </section>
+
+        {/* Nakit akış projeksiyonu */}
+        <CashflowSection /> 
 
         {/* Yaklaşan ödemeler + son işlemler */}
         <div className="mt-6 grid gap-6 lg:grid-cols-2">

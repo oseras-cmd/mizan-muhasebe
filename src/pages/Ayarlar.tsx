@@ -19,15 +19,22 @@ import {
   setAutoBackupEnabled,
 } from "@/lib/finance/backupManager";
 import { todayIso } from "@/lib/finance/format";
+import {
+  checkForUpdates,
+  type UpdateInfo,
+  openUpdateDownload,
+} from "@/lib/finance/updater";
 import { cn } from "@/lib/utils";
 import { setTheme as setAppTheme } from "@/lib/finance/theme";
 import type { Product } from "@/lib/finance/types";
 import {
+  CheckCircle2,
   Clock,
   Database,
   Download,
   HardDrive,
   Info,
+  MonitorCheck,
   Moon,
   Package,
   RotateCcw,
@@ -61,6 +68,10 @@ export default function Ayarlar() {
   const [prodUnit, setProdUnit] = useState("adet");
   const [prodPrice, setProdPrice] = useState("");
   const [prodCategory, setProdCategory] = useState("");
+
+  // Güncelleme kontrolü
+  const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
+  const [checkingUpdate, setCheckingUpdate] = useState(false);
 
   // Refresh backup info periodically
   useEffect(() => {
@@ -155,6 +166,23 @@ export default function Ayarlar() {
     setShowProductForm(false);
   }, [prodName, prodUnit, prodPrice, prodCategory]);
 
+  const handleCheckUpdates = async (force: boolean) => {
+    setCheckingUpdate(true);
+    try {
+      const info = await checkForUpdates(force);
+      setUpdateInfo(info);
+      if (!info) {
+        toast.error("Güncelleme kontrolü yapılamadı — internet bağlantısını kontrol edin.");
+      } else if (info.updateAvailable) {
+        toast.success(`Yeni sürüm var: v${info.latestVersion}`);
+      } else if (force) {
+        toast.success(`Uygulama güncel (v${info.currentVersion}).`);
+      }
+    } finally {
+      setCheckingUpdate(false);
+    }
+  };
+
   const handleToggleAutoBackup = () => {
     const next = !backupMeta.autoBackupEnabled;
     setAutoBackupEnabled(next);
@@ -238,6 +266,57 @@ export default function Ayarlar() {
               {formatBytes(dataSize)}
             </span>
           </div>
+        </section>
+
+        {/* Güncelleme kontrolü */}
+        <section className="mt-6 rounded-lg border bg-card">
+          <header className="flex items-center gap-3 border-b border-border/70 px-5 py-4">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-border bg-background">
+              <MonitorCheck className="size-4 text-muted-foreground" />
+            </div>
+            <div className="flex-1">
+              <h2 className="text-sm font-semibold text-foreground">Güncellemeler</h2>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                Uygulama açılışta günde bir kez yeni sürüm kontrolü yapar
+              </p>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={checkingUpdate}
+              onClick={() => void handleCheckUpdates(true)}
+            >
+              {checkingUpdate ? "Kontrol ediliyor…" : "Şimdi Kontrol Et"}
+            </Button>
+          </header>
+          {updateInfo ? (
+            updateInfo.updateAvailable ? (
+              <div className="flex flex-wrap items-center justify-between gap-4 px-5 py-4">
+                <div>
+                  <p className="text-sm font-medium text-foreground">
+                    Yeni sürüm mevcut: v{updateInfo.latestVersion}
+                  </p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    Şu an v{updateInfo.currentVersion} kullanıyorsunuz.
+                  </p>
+                </div>
+                <Button type="button" size="sm" onClick={() => openUpdateDownload(updateInfo.releaseUrl)}>
+                  <Download className="mr-2 size-3.5" />
+                  Yeni Sürümü İndir
+                </Button>
+              </div>
+            ) : (
+              <p className="flex items-center gap-2 px-5 py-4 text-xs text-muted-foreground">
+                <CheckCircle2 className="size-3.5 text-emerald-600" />
+                Uygulama güncel — v{updateInfo.currentVersion}
+              </p>
+            )
+          ) : (
+            <p className="px-5 py-4 text-xs text-muted-foreground">
+              Sürüm bilgisi henüz kontrol edilmedi. Otomatik kontrol günde bir kez yapılır.
+            </p>
+          )}
         </section>
 
         {/* Tema */}

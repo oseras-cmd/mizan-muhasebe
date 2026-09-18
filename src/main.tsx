@@ -9,6 +9,7 @@ import { createRoot } from "react-dom/client";
 import { BrowserRouter, Route, Routes, useLocation } from "react-router";
 import "./index.css";
 import { initTheme } from "@/lib/finance/theme";
+import { UpdateChecker } from "./components/UpdateChecker";
 
 // Temayı sayfa yüklenmeden önce uygula (flash önlemek için)
 initTheme();
@@ -126,6 +127,7 @@ createRoot(document.getElementById("root")!).render(
         <VlyToolbar />
       </ToolbarErrorBoundary>
       <ConvexAuthProvider client={convex}>
+        <UpdateChecker />
         <BrowserRouter>
           <RouteSyncer />
           <Suspense fallback={<RouteLoading />}>
