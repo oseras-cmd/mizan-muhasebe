@@ -50,7 +50,7 @@ const navGroups = [
     label: "Finans",
     items: [
 
-      { to: "/kasa-banka", label: "Kasa / Banka", icon: Wallet },
+      { to: "/odeme-gecmisi", label: "Ödeme Geçmişi", icon: Wallet },
       { to: "/rapor", label: "Rapor", icon: BarChart3 },
     ],
   },
