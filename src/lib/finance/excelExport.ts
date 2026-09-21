@@ -5,6 +5,7 @@
 
 import * as XLSX from "xlsx";
 import type { FinanceData } from "./types";
+import { PAYMENT_COMPANIES } from "./types";
 
 const MONEY_FMT = "#,##0.00";
 
@@ -73,6 +74,9 @@ export function buildFinanceWorkbook(data: FinanceData): XLSX.WorkBook {
       Tutar: p.amount,
       Ödenen: p.paidAmount ?? 0,
       Kalan: Math.max(0, p.amount - (p.paidAmount ?? 0)),
+      Şirket: p.company
+        ? PAYMENT_COMPANIES.find((c) => c.value === p.company)?.label ?? p.company
+        : "",
       Tekrar:
         p.recurringType === "yok" || !p.recurringType
           ? "Tekrar yok"

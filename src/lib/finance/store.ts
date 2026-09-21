@@ -18,6 +18,7 @@ import type {
   TodoPriority,
   TodoSection,
   TodoTask,
+  PaymentCompany,
   Transaction,
   TransactionCategory,
   TransactionType,
@@ -354,8 +355,11 @@ export function deleteTransfer(id: string) {
 
 export interface NewUpcomingPaymentInput {
   label: string;
-  accountId: string;
+  /** Artık opsiyonel — ödeme bir hesaba bağlanmak zorunda değil */
+  accountId?: string;
   contactId?: string;
+  /** Şirket (Ferla/Meskur vb., opsiyonel) */
+  company?: string;
   amount: number;
   currency?: string;
   dueDate: string;
@@ -394,8 +398,9 @@ export function addUpcomingPayment(
   const payment: UpcomingPayment = {
     id: newId("pay"),
     label: input.label.trim(),
-    accountId: input.accountId,
+    accountId: input.accountId || "",
     contactId: input.contactId || undefined,
+    company: (input.company as PaymentCompany | undefined) || undefined,
     amount: round2(input.amount),
     dueDate: input.dueDate,
     recurringType,
@@ -413,7 +418,7 @@ export function addUpcomingPayment(
 
 export function updateUpcomingPayment(
   id: string,
-  patch: { label?: string; accountId?: string; contactId?: string; amount?: number; dueDate?: string; description?: string },
+  patch: { label?: string; accountId?: string; contactId?: string; company?: string; amount?: number; dueDate?: string; description?: string },
 ) {
   setFinanceData({
     ...data,
@@ -424,6 +429,9 @@ export function updateUpcomingPayment(
             ...(patch.label !== undefined ? { label: patch.label.trim() } : {}),
             ...(patch.accountId !== undefined ? { accountId: patch.accountId } : {}),
             ...(patch.contactId !== undefined ? { contactId: patch.contactId } : {}),
+            ...(patch.company !== undefined
+              ? { company: (patch.company as PaymentCompany | undefined) || undefined }
+              : {}),
             ...(patch.amount !== undefined ? { amount: round2(patch.amount) } : {}),
             ...(patch.dueDate !== undefined ? { dueDate: patch.dueDate } : {}),
             ...(patch.description !== undefined ? { description: patch.description } : {}),
@@ -479,6 +487,7 @@ export function completeUpcomingPayment(id: string, partialAmount?: number) {
     accountId: payment.accountId,
     amount: payAmount,
     date: now,
+    company: payment.company,
   };
 
   // Tekrarlayan ödeme tamamlandıysa bir sonraki taksidi oluştur
@@ -494,6 +503,7 @@ export function completeUpcomingPayment(id: string, partialAmount?: number) {
         id: newId("pay"),
         label: payment.label,
         accountId: payment.accountId,
+        company: payment.company,
         amount: payment.amount,
         dueDate: nextDueDate,
         recurringType: payment.recurringType,

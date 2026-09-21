@@ -31,6 +31,7 @@ import { buildCashflowProjection } from "@/lib/finance/cashflow";
 import { useTcmbRates, POPULAR_CODES, CURRENCY_SYMBOLS, rateChange } from "@/lib/finance/tcmbRates";
 import { cn } from "@/lib/utils";
 import type { TransactionCategory } from "@/lib/finance/types";
+import { companyLabel } from "@/lib/finance/types";
 import { Button } from "@/components/ui/button";
 import {
   AlertTriangle,
@@ -711,7 +712,7 @@ export default function Dashboard() {
             </header>
             <ul className="divide-y divide-border/70">
               {upcoming.map((payment) => {
-                const account = accountById(data, payment.accountId);
+                const account = payment.accountId ? accountById(data, payment.accountId) : undefined;
                 return (
                   <li
                     key={payment.id}
@@ -729,7 +730,7 @@ export default function Dashboard() {
                         </p>
                         <p className="mt-0.5 truncate text-xs text-muted-foreground">
                           {formatDate(payment.dueDate)}
-                          {account ? ` · ${account.name}` : ""}
+                          {payment.company ? ` · ${companyLabel(payment.company)}` : account ? ` · ${account.name}` : ""}
                         </p>
                       </div>
                     </div>
@@ -764,7 +765,7 @@ export default function Dashboard() {
             </header>
             <ul className="divide-y divide-border/70">
               {recent.map((tx) => {
-                const account = accountById(data, tx.accountId);
+                const account = tx.accountId ? accountById(data, tx.accountId) : undefined;
                 const isIncome = tx.type === "gelir";
                 return (
                   <li
@@ -792,7 +793,7 @@ export default function Dashboard() {
                         </p>
                         <p className="mt-0.5 truncate text-xs text-muted-foreground">
                           {tx.category}
-                          {account ? ` · ${account.name}` : ""} ·{" "}
+                          {tx.company ? ` · ${companyLabel(tx.company)}` : account ? ` · ${account.name}` : ""} ·{" "}
                           {formatDate(tx.date)}
                         </p>
                       </div>

@@ -39,6 +39,8 @@ export interface Transaction {
   date: string;
   /** Fatura ödemesiyle otomatik oluşturulduysa bağlı fatura */
   invoiceId?: string;
+  /** Şirket etiketi (Ferla/Meskur vb., opsiyonel) */
+  company?: string;
 }
 
 export type RecurringType = "yok" | "gunluk" | "haftalik" | "aylik" | "yillik";
@@ -52,6 +54,20 @@ export const RECURRING_LABELS: Record<RecurringType, string> = {
 };
 
 export type PaymentCurrency = "TRY" | "USD" | "EUR";
+
+/** Ödemenin bağlı olduğu şirket (masraf ayrımı için) */
+export const PAYMENT_COMPANIES = [
+  { value: "ferla", label: "Ferla" },
+  { value: "meskur", label: "Meskur" },
+] as const;
+
+export type PaymentCompany = (typeof PAYMENT_COMPANIES)[number]["value"];
+
+/** Şirket değerini okunur etikete çevirir (işlemlerde serbest metin de olabilir) */
+export function companyLabel(company?: string): string {
+  if (!company) return "";
+  return PAYMENT_COMPANIES.find((c) => c.value === company)?.label ?? company;
+}
 
 export const PAYMENT_CURRENCY_OPTIONS: { value: PaymentCurrency; label: string; symbol: string }[] = [
   { value: "TRY", label: "Türk Lirası", symbol: "₺" },
@@ -78,6 +94,8 @@ export interface UpcomingPayment {
   recurringType?: RecurringType;
   /** Tekrarlanan ödemelerin ortak grubu ID'si */
   recurringGroupId?: string;
+  /** Bağlı şirket (Ferla/Meskur masraf ayrımı, opsiyonel) */
+  company?: PaymentCompany;
   /** "Şimdi Ödenecekler" kuyruğuna atanmış mı (sürükle-bırak) */
   queued?: boolean;
   /** Kuyruğa atanma zamanı (ISO) */

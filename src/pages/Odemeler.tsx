@@ -5,7 +5,6 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
-  accountById,
   contactById,
   contactsSorted,
   dueLabel,
@@ -29,7 +28,7 @@ import {
   updateUpcomingPayment,
   useFinanceData,
 } from "@/lib/finance/store";
-import { type RecurringType, type PaymentCurrency, PAYMENT_CURRENCY_OPTIONS, RECURRING_LABELS } from "@/lib/finance/types";
+import { type RecurringType, type PaymentCurrency, type PaymentCompany, PAYMENT_CURRENCY_OPTIONS, PAYMENT_COMPANIES, RECURRING_LABELS, companyLabel } from "@/lib/finance/types";
 import { cn } from "@/lib/utils";
 import {
   AlertTriangle,
@@ -77,7 +76,7 @@ export default function Odemeler() {
 
   /* Düzenleme formu */
   const [editLabel, setEditLabel] = useState("");
-  const [editAccountId, setEditAccountId] = useState("");
+  const [editCompany, setEditCompany] = useState<PaymentCompany | "">("");
   const [editContactId, setEditContactId] = useState("");
   const [editAmount, setEditAmount] = useState(0);
   const [editDueDate, setEditDueDate] = useState("");
@@ -86,7 +85,7 @@ export default function Odemeler() {
 
   /* Yeni ödeme formu */
   const [label, setLabel] = useState("");
-  const [accountId, setAccountId] = useState("");
+  const [company, setCompany] = useState<PaymentCompany | "">("");
   const [contactId, setContactId] = useState("");
   const [amount, setAmount] = useState(0);
   const [dueDate, setDueDate] = useState(todayIso());
@@ -182,10 +181,6 @@ export default function Odemeler() {
       setError("Lütfen ödeme açıklaması girin.");
       return;
     }
-    if (!accountId) {
-      setError("Lütfen ödenecek hesabı seçin.");
-      return;
-    }
     if (!Number.isFinite(amount) || amount <= 0) {
       setError("Lütfen geçerli bir tutar girin.");
       return;
@@ -196,7 +191,7 @@ export default function Odemeler() {
     }
     addUpcomingPayment({
       label: label.trim(),
-      accountId,
+      company: company || undefined,
       contactId: contactId || undefined,
       amount,
       currency: paymentCurrency,
@@ -208,7 +203,7 @@ export default function Odemeler() {
     const recurringLabel = recurringType !== "yok" ? ` (${RECURRING_LABELS[recurringType]})` : "";
     toast.success(`Ödeme planlandı${recurringLabel}.`);
     setLabel("");
-    setAccountId("");
+    setCompany("");
     setContactId("");
     setAmount(0);
     setRecurringType("yok");
@@ -247,7 +242,7 @@ export default function Odemeler() {
     const payment = data.upcomingPayments.find((p) => p.id === paymentId);
     if (!payment) return;
     setEditLabel(payment.label);
-    setEditAccountId(payment.accountId);
+    setEditCompany((payment.company as PaymentCompany) ?? "");
     setEditContactId(payment.contactId ?? "");
     setEditAmount(payment.amount);
     setEditDueDate(payment.dueDate);
@@ -261,10 +256,6 @@ export default function Odemeler() {
       setEditError("Lütfen açıklama girin.");
       return;
     }
-    if (!editAccountId) {
-      setEditError("Lütfen hesap seçin.");
-      return;
-    }
     if (!Number.isFinite(editAmount) || editAmount <= 0) {
       setEditError("Lütfen geçerli bir tutar girin.");
       return;
@@ -275,7 +266,7 @@ export default function Odemeler() {
     }
     updateUpcomingPayment(paymentId, {
       label: editLabel.trim(),
-      accountId: editAccountId,
+      company: editCompany || undefined,
       contactId: editContactId || undefined,
       amount: editAmount,
       dueDate: editDueDate,
@@ -358,14 +349,13 @@ export default function Odemeler() {
               placeholder="Açıklama"
               className="h-8 text-xs"
             />            <select
-              value={editAccountId}
-              onChange={(e) => { setEditAccountId(e.target.value); setEditError(null); }}
+              value={editCompany}
+              onChange={(e) => { setEditCompany(e.target.value as PaymentCompany | ""); setEditError(null); }}
               className="h-8 w-full rounded-md border border-input bg-transparent px-2 text-xs outline-none focus-visible:border-ring"
-
             >
-              <option value="">Hesap seçin</option>
-              {data.accounts.map((account) => (
-                <option key={account.id} value={account.id}>{account.name}</option>
+              <option value="">Şirket seçin (opsiyonel)</option>
+              {PAYMENT_COMPANIES.map((c) => (
+                <option key={c.value} value={c.value}>{c.label}</option>
               ))}
             </select>
             {contactsSorted(data).length > 0 && (
@@ -525,7 +515,6 @@ export default function Odemeler() {
   };
 
   const renderPaymentItem = (payment: typeof data.upcomingPayments[0]) => {
-    const account = accountById(data, payment.accountId);
     const paidAmount = payment.paidAmount ?? 0;
     const remaining = payment.amount - paidAmount;
     const hasPartialPayment = paidAmount > 0;
@@ -570,7 +559,7 @@ export default function Odemeler() {
             )}
             <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
               <span>{formatDate(payment.dueDate)}</span>
-              {account && <span>{account.name}</span>}
+              {payment.company && <span className="font-medium text-primary">{companyLabel(payment.company)}</span>}
               {(() => {
                 const contact = payment.contactId ? contactById(data, payment.contactId) : undefined;
                 return contact ? <span className="inline-flex items-center gap-0.5 text-primary"><Users className="size-2.5" />{contact.name}</span> : null;
@@ -801,13 +790,21 @@ export default function Odemeler() {
           onDrop={handleDropOnList}
           className="mt-5 overflow-hidden rounded-lg border bg-card print:border-0"
         >
-          <header className="flex items-center justify-between border-b border-border/70 px-5 py-3">
+          <header className="flex flex-wrap items-center justify-between gap-3 border-b border-border/70 px-5 py-3">
             <div>
               <h2 className="text-sm font-semibold text-foreground">Ödeme Listesi</h2>
               <p className="mt-0.5 text-xs text-muted-foreground">
                 {filteredPayments.length} kalem — toplam {formatTRY(totalAmount)}
               </p>
             </div>
+            <Button
+              type="button"
+              onClick={() => setShowDialog(true)}
+              className="h-9 gap-1.5 text-xs font-semibold print:hidden"
+            >
+              <Plus className="size-4" />
+              Yeni Ödeme
+            </Button>
           </header>
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
@@ -821,7 +818,7 @@ export default function Odemeler() {
                   <th className="px-2 py-2 text-right w-28">Ödenen</th>
                   <th className="px-2 py-2 text-right w-28">Kalan</th>
                   <th className="px-2 py-2 text-center w-16">Durum</th>
-                  <th className="px-2 py-2 w-32">Hesap</th>
+                  <th className="px-2 py-2 w-28">Şirket</th>
                   <th className="px-2 py-2 w-24">Cari</th>
                   <th className="px-2 py-2 text-center w-8"></th>
                 </tr>
@@ -832,12 +829,11 @@ export default function Odemeler() {
                     <td colSpan={11} className="px-3 py-16 text-center">
                       <CalendarClock className="mx-auto size-6 text-muted-foreground/60" />
                       <p className="mt-3 text-sm font-medium text-foreground">Ödeme bulunamadı</p>
-                      <p className="mt-1 text-xs text-muted-foreground">Soldaki formdan yeni ödeme ekleyin.</p>
+                      <p className="mt-1 text-xs text-muted-foreground">"Yeni Ödeme" butonuyla ödeme ekleyin.</p>
                     </td>
                   </tr>
                 ) : (
                   filteredPayments.map((payment, idx) => {
-                    const account = accountById(data, payment.accountId);
                     const contact = payment.contactId ? contactById(data, payment.contactId) : undefined;
                     const paid = payment.paidAmount ?? 0;
                     const remaining = payment.amount - paid;
@@ -934,8 +930,12 @@ export default function Odemeler() {
                             {durumLabel}
                           </span>
                         </td>
-                        <td className="px-2 py-2 text-muted-foreground truncate">
-                          {account?.name ?? "—"}
+                        <td className="px-2 py-2 truncate">
+                          {payment.company ? (
+                            <span className="font-medium text-primary">{companyLabel(payment.company)}</span>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
                         </td>
                         <td className="px-2 py-2 truncate">
                           {contact ? (
@@ -979,36 +979,8 @@ export default function Odemeler() {
         </section>
 
         <div className="mt-4 grid gap-6 lg:grid-cols-5 print:grid-cols-1">
-          {/* Sol panel: hızlı ekle + rapor */}
+          {/* Sol panel: rapor */}
           <div className="self-start space-y-6 lg:col-span-2 print:hidden">
-            {/* Yeni ödeme — açılır pencere tetikleyicisi */}
-            <section className="rounded-lg border bg-card">
-              <header className="border-b border-border/70 px-5 py-4">
-                <h2 className="text-sm font-semibold text-foreground">
-                  Yeni Ödeme
-                </h2>
-                <p className="mt-0.5 text-xs text-muted-foreground">
-                  Planlanacak ödemeyi ekleyin
-                </p>
-              </header>
-              <div className="p-5 sm:p-6">
-                <Button
-                  type="button"
-                  onClick={() => setShowDialog(true)}
-                  className="h-24 w-full flex-col gap-2 text-base font-semibold"
-                >
-                  <span className="flex size-10 items-center justify-center rounded-full bg-primary-foreground/15">
-                    <Plus className="size-6" />
-                  </span>
-                  Yeni Ödeme Ekle
-                </Button>
-                <p className="mt-3 text-center text-[11px] text-muted-foreground/70">
-                  Ödeme girişi açılır pencerede yapılır.
-                </p>
-              </div>
-            </section>
-
-
             {/* Ödeme Raporu */}
             <section className="rounded-lg border bg-card">
               <header className="flex items-center justify-between border-b border-border/70 px-5 py-4">
@@ -1306,23 +1278,27 @@ export default function Odemeler() {
 
             <div className="flex flex-col gap-1.5">
               <Label className="text-xs font-medium text-muted-foreground">
-                Ödenecek Hesap
+                <Users className="mr-1 inline-block size-3" />
+                Şirket (Opsiyonel)
               </Label>
               <select
-                value={accountId}
+                value={company}
                 onChange={(event) => {
-                  setAccountId(event.target.value);
+                  setCompany(event.target.value as PaymentCompany | "");
                   setError(null);
                 }}
                 className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]"
               >
-                <option value="">Hesap seçin</option>
-                {data.accounts.map((account) => (
-                  <option key={account.id} value={account.id}>
-                    {account.name} ({formatTRY(account.balance)})
+                <option value="">Şirket seçin (opsiyonel)</option>
+                {PAYMENT_COMPANIES.map((c) => (
+                  <option key={c.value} value={c.value}>
+                    {c.label}
                   </option>
                 ))}
               </select>
+              <p className="text-[11px] text-muted-foreground/70">
+                Ferla veya Meskur'a ait masrafları şirkete bağlayın; zorunlu değil.
+              </p>
             </div>
 
             {contactsSorted(data).length > 0 && (
@@ -1461,7 +1437,7 @@ export default function Odemeler() {
               >
                 İptal
               </Button>
-              <Button type="submit" disabled={!label.trim() || !accountId || amount <= 0}>
+              <Button type="submit" disabled={!label.trim() || amount <= 0}>
                 <Plus className="mr-2 size-4" />
                 Ödemeyi Planla
               </Button>

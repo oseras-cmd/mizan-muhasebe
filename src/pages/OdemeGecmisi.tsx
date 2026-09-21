@@ -8,6 +8,7 @@ import {
 } from "@/lib/finance/format";
 import { useFinanceData } from "@/lib/finance/store";
 import { accountById } from "@/lib/finance/dashboard";
+import { companyLabel } from "@/lib/finance/types";
 import { cn } from "@/lib/utils";
 import {
   ArrowDownRight,
@@ -70,13 +71,14 @@ export default function OdemeGecmisi() {
         if (dashIdx >= 0) label = tx.description.slice(dashIdx + 1).trim();
         const parenIdx = label.indexOf(" (");
         if (parenIdx > 0) label = label.slice(0, parenIdx).trim();
+        const company = companyLabel(tx.company);
         return {
           id: tx.id,
           date: tx.date,
           label,
           amount: tx.amount,
           currency: "TRY" as const,
-          accountName: accountById(data, tx.accountId)?.name ?? "—",
+          accountName: company || (tx.accountId ? accountById(data, tx.accountId)?.name ?? "—" : "—"),
           kind: "odeme" as const,
         };
       })
@@ -391,7 +393,7 @@ export default function OdemeGecmisi() {
                             {entry.label}
                           </p>
                           <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                            {formatDate(entry.date)} · {entry.accountName} hesabından
+                            {formatDate(entry.date)}{entry.accountName !== "—" ? ` · ${entry.accountName}` : ""}
                           </p>
                         </div>
                       </div>
