@@ -1,7 +1,7 @@
 {
   "name": "mizan-muhasebe",
   "private": true,
-  "version": "1.0.3",
+  "version": "1.0.4",
   "type": "module",
   "main": "electron/main.cjs",
   "description": "Mizan — Bulut Tabanlı Ön Muhasebe Programı",
@@ -19,7 +19,7 @@
   "build": {
     "appId": "com.mizan.muhasebe",
     "productName": "Mizan",
-    "compression": "store",
+    "compression": "normal",
     "directories": {
       "output": "release"
     },
