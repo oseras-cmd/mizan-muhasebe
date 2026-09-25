@@ -1,0 +1,51 @@
+name: Windows EXE Derle ve Yayınla
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - master
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Kodu indir
+        uses: actions/checkout@v4
+
+      - name: Bun kur
+        uses: oven-sh/setup-bun@v2
+
+      - name: Bağımlılıkları yükle
+        run: bun install
+
+      - name: Uygulamayı derle (tsc + vite)
+        run: bun run build
+
+      - name: Convex tiplerini doğrula (varsa)
+        shell: bash
+        run: |
+          if [ -d src/convex/_generated ]; then echo "Convex tipleri mevcut"; else echo "UYARI: src/convex/_generated eksik"; fi
+
+      - name: Windows portable exe paketle
+        run: npx electron-builder --win portable --publish never
+
+      - name: Sürüm numarasını oku
+        id: ver
+        shell: bash
+        run: echo "version=$(node -p 'require("./package.json").version')" >> "$GITHUB_OUTPUT"
+
+      - name: GitHub Release oluştur ve exe yükle
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.ver.outputs.version }}
+          name: Mizan v${{ steps.ver.outputs.version }}
+          files: release/*.exe
+          make_latest: "true"
+          fail_on_unmatched_files: true
