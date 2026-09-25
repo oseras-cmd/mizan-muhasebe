@@ -1,9 +1,6 @@
 import '@vly-ai/integrations';
 import { Toaster } from "@/components/ui/sonner";
-import { RequireAuth } from "@/components/RequireAuth";
 import { VlyToolbar } from "../vly-toolbar-readonly.tsx";
-import { ConvexAuthProvider } from "@convex-dev/auth/react";
-import { ConvexReactClient } from "convex/react";
 import React, { StrictMode, useEffect, lazy, Suspense } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, Route, Routes, useLocation } from "react-router";
@@ -16,7 +13,6 @@ initTheme();
 
 // Lazy load route components for better code splitting
 const Landing = lazy(() => import("./pages/Landing.tsx"));
-const AuthPage = lazy(() => import("./pages/Auth.tsx"));
 const Dashboard = lazy(() => import("./pages/Dashboard.tsx"));
 const Odemeler = lazy(() => import("./pages/Odemeler.tsx"));
 const OdemeGecmisi = lazy(() => import("./pages/OdemeGecmisi.tsx"));
@@ -92,10 +88,6 @@ class RootErrorBoundary extends React.Component<
   }
 }
 
-const convex = new ConvexReactClient(import.meta.env.VITE_CONVEX_URL as string);
-
-
-
 function RouteSyncer() {
   const location = useLocation();
   useEffect(() => {
@@ -126,88 +118,25 @@ createRoot(document.getElementById("root")!).render(
       <ToolbarErrorBoundary>
         <VlyToolbar />
       </ToolbarErrorBoundary>
-      <ConvexAuthProvider client={convex}>
-        <UpdateChecker />
-        <BrowserRouter>
-          <RouteSyncer />
-          <Suspense fallback={<RouteLoading />}>
-            <Routes>
-              <Route path="/" element={<Landing />} />
-              <Route
-                path="/auth"
-                element={<AuthPage redirectAfterAuth="/dashboard" />}
-              />
-              <Route
-                path="/dashboard"
-                element={
-                  <RequireAuth>
-                    <Dashboard />
-                  </RequireAuth>
-                }
-              />
-              <Route
-                path="/odemeler"
-                element={
-                  <RequireAuth>
-                    <Odemeler />
-                  </RequireAuth>
-                }
-              />
-
-              <Route
-                path="/odeme-gecmisi"
-                element={
-                  <RequireAuth>
-                    <OdemeGecmisi />
-                  </RequireAuth>
-                }
-              />
-              <Route
-                path="/rapor"
-                element={
-                  <RequireAuth>
-                    <Rapor />
-                  </RequireAuth>
-                }
-              />
-              <Route
-                path="/gorevler"
-                element={
-                  <RequireAuth>
-                    <Gorevler />
-                  </RequireAuth>
-                }
-              />
-              <Route
-                path="/hesaplayicilar"
-                element={
-                  <RequireAuth>
-                    <Hesaplayicilar />
-                  </RequireAuth>
-                }
-              />
-              <Route
-                path="/belgeler"
-                element={
-                  <RequireAuth>
-                    <Belgeler />
-                  </RequireAuth>
-                }
-              />
-              <Route
-                path="/ayarlar"
-                element={
-                  <RequireAuth>
-                    <Ayarlar />
-                  </RequireAuth>
-                }
-              />
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-          </Suspense>
-        </BrowserRouter>
-        <Toaster />
-      </ConvexAuthProvider>
+      <UpdateChecker />
+      <BrowserRouter>
+        <RouteSyncer />
+        <Suspense fallback={<RouteLoading />}>
+          <Routes>
+            <Route path="/" element={<Landing />} />
+            <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/odemeler" element={<Odemeler />} />
+            <Route path="/odeme-gecmisi" element={<OdemeGecmisi />} />
+            <Route path="/rapor" element={<Rapor />} />
+            <Route path="/gorevler" element={<Gorevler />} />
+            <Route path="/hesaplayicilar" element={<Hesaplayicilar />} />
+            <Route path="/belgeler" element={<Belgeler />} />
+            <Route path="/ayarlar" element={<Ayarlar />} />
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </Suspense>
+      </BrowserRouter>
+      <Toaster />
     </RootErrorBoundary>
   </StrictMode>,
 );

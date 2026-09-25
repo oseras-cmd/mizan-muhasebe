@@ -1,7 +1,7 @@
 import { formatInputValue } from "@/lib/finance/format";
 import { useState, useMemo } from "react";
 import { Input } from "@/components/ui/input";
-import { Field, CalcCard, ResultBox, ResultRow, ResultTotalRow, Segmented, InfoNote } from "./shared";
+import { Field, CalcCard, PrintButton, PrintHeader, ResultBox, ResultRow, ResultTotalRow, InfoNote } from "./shared";
 import { formatTRY, parseTurkishNumber } from "@/lib/finance/format";
 import { cn } from "@/lib/utils";
 
@@ -114,19 +114,27 @@ export function MesaiHesap() {
   ];
 
   return (
-    <CalcCard
-      title="İşçi Mesai Hesaplama"
-      subtitle="Brüt aylık ücrete göre fazla mesai, gece ve tatil ücretlerini hesaplayın"
-      actions={
-        <button
-          type="button"
-          className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
-          onClick={() => setRates(DEFAULT_RATES)}
-        >
-          Varsayılana sıfırla
-        </button>
-      }
-    >
+    <div className="print-area">
+      <PrintHeader
+        title="Mesai Hesaplama Raporu"
+        subtitle={sonuc ? `Aylık brüt ${formatTRY(brutValue)} · Toplam aylık brüt ${formatTRY(sonuc.toplamAylikBrut)}` : undefined}
+      />
+      <CalcCard
+        title="İşçi Mesai Hesaplama"
+        subtitle="Brüt aylık ücrete göre fazla mesai, gece ve tatil ücretlerini hesaplayın"
+        actions={
+          <div className="flex items-center gap-2">
+            <PrintButton />
+            <button
+              type="button"
+              className="print-hide text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
+              onClick={() => setRates(DEFAULT_RATES)}
+            >
+              Varsayılana sıfırla
+            </button>
+          </div>
+        }
+      >
       <div className="grid gap-6">
         {/* Girdi alanları */}
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -250,6 +258,7 @@ export function MesaiHesap() {
           Oranlar 2026 yılı mevzuatına göre ayarlanmıştır.
         </InfoNote>
       </div>
-    </CalcCard>
+      </CalcCard>
+    </div>
   );
 }

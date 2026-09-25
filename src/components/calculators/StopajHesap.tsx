@@ -9,7 +9,7 @@ import {
 } from "@/components/ui/select";
 import { formatTRY, parseTurkishNumber } from "@/lib/finance/format";
 import { useMemo, useState } from "react";
-import { CalcCard, Field, ResultBox, ResultRow, ResultTotalRow, Segmented } from "./shared";
+import { CalcCard, Field, PrintButton, PrintHeader, ResultBox, ResultRow, ResultTotalRow, Segmented } from "./shared";
 
 const STOPAJ_TYPES = [
   { rate: 20, label: "Kira (Konut) — %20" },
@@ -43,10 +43,16 @@ export function StopajHesap() {
   }, [tutarValue, oran, sekil]);
 
   return (
-    <CalcCard
-      title="Stopaj Hesaplama"
-      subtitle="Kira, serbest meslek ve diğer gelir türleri için stopaj kesintisi"
-    >
+    <div className="print-area">
+      <PrintHeader
+        title="Stopaj Hesaplama Raporu"
+        subtitle={result ? `${(STOPAJ_TYPES[Number(turIndex)] ?? STOPAJ_TYPES[0]).label} · ${sekil === "brut" ? "Brüt üzerinden" : "Net üzerinden"}` : undefined}
+      />
+      <CalcCard
+        title="Stopaj Hesaplama"
+        subtitle="Kira, serbest meslek ve diğer gelir türleri için stopaj kesintisi"
+        actions={<PrintButton />}
+      >
       <div className="grid gap-6">
         <div className="grid gap-5 sm:grid-cols-3">
           <Field label="Gelir Türü">
@@ -101,6 +107,7 @@ export function StopajHesap() {
           />
         </ResultBox>
       </div>
-    </CalcCard>
+      </CalcCard>
+    </div>
   );
 }

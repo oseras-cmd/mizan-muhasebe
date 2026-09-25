@@ -1,7 +1,59 @@
 import { formatInputValue } from "@/lib/finance/format";
 import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { Printer } from "lucide-react";
 import type { ReactNode } from "react";
+import { formatFullDate } from "@/lib/finance/format";
+
+/**
+ * Yazdır butonu — hesaplamanın o anki sonucunu .print-area olarak basar.
+ * Yönetici raporlarında anlaşılır, kâğıt dostu bir görünüm sağlar.
+ */
+export function PrintButton({
+  className,
+  label = "Yazdır",
+}: {
+  className?: string;
+  label?: string;
+}) {
+  return (
+    <Button
+      type="button"
+      variant="outline"
+      size="sm"
+      className={cn("print-hide gap-1.5", className)}
+      onClick={() => window.print()}
+    >
+      <Printer className="size-3.5" />
+      {label}
+    </Button>
+  );
+}
+
+/**
+ * Basılı sayfada en üstte görünen rapor başlığı — ekranda gizli, yazdırmada görünür.
+ */
+export function PrintHeader({
+  title,
+  subtitle,
+}: {
+  title: string;
+  subtitle?: string;
+}) {
+  return (
+    <div className="screen-hide mb-4 pb-3 border-b border-neutral-300">
+      <div className="flex items-baseline justify-between gap-4">
+        <h2 className="text-lg font-bold tracking-tight text-neutral-900">{title}</h2>
+        <span className="text-xs text-neutral-600 whitespace-nowrap">
+          {formatFullDate(new Date())}
+        </span>
+      </div>
+      {subtitle && <p className="mt-1 text-xs text-neutral-600">{subtitle}</p>}
+      <p className="mt-1 text-[10px] text-neutral-500">Mizan — Profesyonel Muhasebe Yazılımı</p>
+    </div>
+  );
+}
 
 export function Field({
   label,
@@ -28,14 +80,21 @@ export function CalcCard({
   subtitle,
   actions,
   children,
+  className,
 }: {
   title: string;
   subtitle?: string;
   actions?: ReactNode;
   children: ReactNode;
+  className?: string;
 }) {
   return (
-    <section className="rounded-lg border bg-card">
+    <section
+      className={cn(
+        "print-avoid-break rounded-lg border bg-card",
+        className,
+      )}
+    >
       {(title || actions) && (
         <header className="flex flex-wrap items-center justify-between gap-3 border-b border-border/70 px-5 py-4">
           <div>

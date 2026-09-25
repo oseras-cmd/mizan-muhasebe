@@ -77,7 +77,7 @@ function getAppVersion(): string {
     // ignore
   }
   const meta = document.querySelector('meta[name="mizan-version"]');
-  return meta?.getAttribute("content") ?? "1.0.1";
+  return meta?.getAttribute("content") ?? "1.0.8";
 }
 
 function shouldCheckNow(): boolean {

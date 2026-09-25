@@ -43,7 +43,7 @@ export default function Landing() {
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
           <Wordmark />
           <Button asChild variant="ghost" size="sm">
-            <Link to="/auth?returnTo=%2Fdashboard">Giriş Yap</Link>
+            <Link to="/dashboard">Panele Git</Link>
           </Button>
         </div>
       </header>
@@ -70,7 +70,7 @@ export default function Landing() {
               </p>
               <div className="mt-9 flex flex-wrap items-center justify-center gap-3">
                 <Button asChild size="lg">
-                  <Link to="/auth?returnTo=%2Fdashboard">
+                  <Link to="/dashboard">
                     Panele giriş yapın
                     <ArrowRight className="ml-2 size-4" />
                   </Link>
@@ -172,11 +172,11 @@ export default function Landing() {
               Bugün başlayın — sadece birkaç saniye.
             </h2>
             <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-muted-foreground">
-              E-posta adresinizle ya da misafir hesabıyla panele giriş yapın,
-              ilk genel bakışınız hazır olsun.
+              Verileriniz bu tarayıcıda güvenle saklanır; hesap veya şifre
+              gerekmez. Panele girin, ilk genel bakışınız hazır olsun.
             </p>
             <Button asChild size="lg" className="mt-8">
-              <Link to="/auth?returnTo=%2Fdashboard">
+              <Link to="/dashboard">
                 Panele giriş yapın
                 <ArrowRight className="ml-2 size-4" />
               </Link>

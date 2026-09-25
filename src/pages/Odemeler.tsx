@@ -162,6 +162,9 @@ export default function Odemeler() {
     (sum, p) => sum + (p.amount - (p.paidAmount ?? 0)),
     0,
   );
+  /* Kuyruk toplamı ödendikten sonra elinde kalan para */
+  const queueAfter = cashOnHand - queuedTotal;
+  const queueNeedMore = queueAfter < 0;
 
   // Ödeme raporu için istatistikler
   const allPayments = data.upcomingPayments;
@@ -715,12 +718,31 @@ export default function Odemeler() {
               </p>
             </div>
             {queuedPayments.length > 0 && (
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <span className="rounded-full bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary">
                   {queuedPayments.length} kalem
                 </span>
                 <span className="font-mono text-sm font-semibold tabular-nums text-foreground">
                   {formatCurrency(queuedTotal, "TRY")}
+                </span>
+                <div className="hidden h-5 w-px bg-border sm:block" />
+                <span className="flex flex-wrap items-center gap-1.5 rounded-md bg-muted/60 px-2.5 py-1 text-xs">
+                  <Coins className="size-3 text-muted-foreground" />
+                  <span className="text-muted-foreground">Elimde:</span>
+                  <span className="font-mono font-semibold tabular-nums text-foreground">
+                    {formatCurrency(cashOnHand, "TRY")}
+                  </span>
+                  <span className="text-muted-foreground/50">·</span>
+                  <span className="text-muted-foreground">Ödeme sonrası:</span>
+                  <span
+                    className={cn(
+                      "font-mono font-semibold tabular-nums",
+                      queueNeedMore ? "text-destructive" : "text-emerald-600",
+                    )}
+                  >
+                    {queueNeedMore ? "−" : "+"}
+                    {formatCurrency(Math.abs(queueAfter), "TRY")}
+                  </span>
                 </span>
               </div>
             )}

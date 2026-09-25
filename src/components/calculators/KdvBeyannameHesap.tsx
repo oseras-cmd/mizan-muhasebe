@@ -21,10 +21,10 @@ import {
   CheckCircle2,
   FileText,
   Landmark,
-  Printer,
   ReceiptText,
   Scale,
 } from "lucide-react";
+import { PrintButton, PrintHeader } from "./shared";
 
 const MONTHS = [
   "Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran",
@@ -133,7 +133,15 @@ export function KdvBeyannameHesap() {
     );
 
   return (
-    <div className="space-y-6">
+    <div className="print-area space-y-6">
+      <PrintHeader
+        title="KDV-1 Beyanname Hesaplama Raporu"
+        subtitle={`${MONTHS[month]} ${year} dönemi · ${sonuc.odenecek > 0 ? "Ödenecek KDV" : "Devreden KDV"} ${fmt(sonuc.odenecek > 0 ? sonuc.odenecek : sonuc.devreden)} ₺`}
+      />
+      {/* Yazdır butonu — ekranda, hesap tablosunun üstünde */}
+      <div className="print-hide flex justify-end">
+        <PrintButton className="h-9" />
+      </div>
       {/* Beyanname Dönemi */}
       <section className="rounded-lg border bg-card">
         <div className="border-b border-border/70 px-5 py-4">
@@ -383,10 +391,6 @@ export function KdvBeyannameHesap() {
       <section className="rounded-lg border bg-card">
         <div className="flex items-center justify-between border-b border-border/70 px-5 py-4">
           {sectionHeader("Beyanname Kontrol Listesi", <CheckCircle2 className="size-4 text-muted-foreground" />)}
-          <Button type="button" variant="outline" size="sm" className="gap-1.5" onClick={() => window.print()}>
-            <Printer className="size-3.5" />
-            Yazdır
-          </Button>
         </div>
         <ul className="divide-y divide-border/50">
           {KDV_KONTROL_LISTESI.map((item, i) => (

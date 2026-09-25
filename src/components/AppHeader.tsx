@@ -1,5 +1,4 @@
 import { Button } from "@/components/ui/button";
-import { useAuth } from "@/hooks/use-auth";
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { overduePayments } from "@/lib/finance/dashboard";
 import { useFinanceData } from "@/lib/finance/store";
@@ -14,7 +13,6 @@ import {
   FolderOpen,
   LayoutDashboard,
   LayoutList,
-  LogOut,
   Moon,
   Search,
   Settings,
@@ -68,7 +66,6 @@ const navGroups = [
 ];
 
 export function AppHeader() {
-  const { user, signOut } = useAuth();
   const navigate = useNavigate();
   const data = useFinanceData();
   const overdueCount = overduePayments(data).length;
@@ -133,11 +130,6 @@ export function AppHeader() {
   useEffect(() => {
     setActiveResult(0);
   }, [query]);
-
-  const handleSignOut = async () => {
-    await signOut();
-    navigate("/");
-  };
 
   const handleExport = (kind: string) => {
     setShowExport(false);
@@ -221,26 +213,7 @@ export function AppHeader() {
           ))}
         </nav>
         <div className="border-t border-sidebar-border/60 p-3">
-          <div className="flex items-center gap-3 rounded-xl bg-muted/50 px-3 py-2.5">
-            <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary/10 font-mono text-xs font-bold uppercase text-primary ring-1 ring-primary/20">
-              {(user?.email ?? "MZ").slice(0, 2)}
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="text-xs font-semibold text-foreground">Oturum</p>
-              <p className="truncate text-[11px] text-muted-foreground">
-                {user?.email ?? "—"}
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={handleSignOut}
-              title="Çıkış"
-              className="shrink-0 rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
-            >
-              <LogOut className="size-3.5" />
-            </button>
-          </div>
-          <div className="mt-2 flex items-center gap-1 px-1">
+          <div className="flex items-center gap-1 px-1">
             <Button type="button" variant="ghost" size="sm" className="h-8 flex-1 justify-start gap-2 text-xs text-muted-foreground hover:text-foreground" onClick={toggleTheme} title="Tema değiştir">
               {isDark ? <Sun className="size-3.5" /> : <Moon className="size-3.5" />}
               {isDark ? "Aydınlık" : "Karanlık"} tema

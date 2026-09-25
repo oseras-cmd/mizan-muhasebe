@@ -153,3 +153,70 @@
     0 4px 8px -2px rgb(16 24 40 / 0.06),
     0 2px 4px -2px rgb(16 24 40 / 0.04);
 }
+
+/* Ekranda gizli, yazdırmada görünen rapor başlığı */
+@utility screen-hide {
+  @media screen {
+    display: none;
+  }
+}
+
+/* ─── Yazdırma: yalnızca hedef alan temiz çıkar ─── */
+/* Sayfada .print-area varsa odaklı yazdırma uygulanır; yoksa sayfanın kendi
+   print: sınıfları (ör. Ödemeler) aynen çalışmayı sürdürür. */
+@media print {
+  @page {
+    margin: 12mm;
+  }
+  body {
+    background: #fff !important;
+  }
+  body:has(.print-area) * {
+    visibility: hidden;
+  }
+  .print-area,
+  .print-area * {
+    visibility: visible;
+  }
+  .print-area {
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+  .print-area * {
+    color: #111827 !important;
+    background-color: transparent !important;
+    background-image: none !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
+  }
+  .print-hide {
+    display: none !important;
+  }
+  .print-area table {
+    border-collapse: collapse !important;
+  }
+  .print-area th,
+  .print-area td {
+    border: 1px solid #d1d5db !important;
+    background: #fff !important;
+  }
+  .print-area thead th {
+    background: #f3f4f6 !important;
+    color: #111827 !important;
+  }
+  .print-area input,
+  .print-area button {
+    border: none !important;
+  }
+  /* Uzun tabloların bölünmesi yerine düzgün akması için */
+  .print-area tr,
+  .print-area .print-avoid-break {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+}

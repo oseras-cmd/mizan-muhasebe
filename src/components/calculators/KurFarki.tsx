@@ -14,11 +14,12 @@ import {
   type RateCurrency,
 } from "@/lib/finance/rates";
 import { cn } from "@/lib/utils";
-import { Calculator } from "lucide-react";
+import { Calculator, Printer } from "lucide-react";
 import { useState } from "react";
 import {
   CalcCard,
   Field,
+  PrintHeader,
   ResultBox,
   ResultRow,
   ResultTotalRow,
@@ -104,10 +105,25 @@ export function KurFarki() {
   };
 
   return (
-    <CalcCard
-      title="İki Tarih Arası Kur Farkı"
-      subtitle="Döviz cinsi ve tutar için kambiyo kârı / zararı hesaplama"
-    >
+    <div className="print-area">
+      <PrintHeader
+        title="İki Tarih Arası Kur Farkı Raporu"
+        subtitle={result ? `${doviz} · ${result.startDate} — ${result.endDate}` : undefined}
+      />
+      <CalcCard
+        title="İki Tarih Arası Kur Farkı"
+        subtitle="Döviz cinsi ve tutar için kambiyo kârı / zararı hesaplama"
+        actions={
+          <button
+            type="button"
+            onClick={() => window.print()}
+            className="print-hide inline-flex h-8 items-center gap-1.5 rounded-md border bg-card px-3 text-xs font-medium text-foreground transition-colors hover:bg-muted"
+          >
+            <Printer className="size-3.5" />
+            Yazdır
+          </button>
+        }
+      >
       <div className="grid gap-6">
         <form onSubmit={handleSubmit} className="grid gap-6">
           <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
@@ -142,7 +158,7 @@ export function KurFarki() {
               <Input
                 type="date"
                 value={baslangic}
-                onChange={(event) => setBaslangic(formatInputValue(event.target.value))}
+                onChange={(event) => setBaslangic(event.target.value)}
                 required
               />
             </Field>
@@ -150,7 +166,7 @@ export function KurFarki() {
               <Input
                 type="date"
                 value={bitis}
-                onChange={(event) => setBitis(formatInputValue(event.target.value))}
+                onChange={(event) => setBitis(event.target.value)}
               />
             </Field>
           </div>
@@ -234,6 +250,7 @@ export function KurFarki() {
           </ResultBox>
         )}
       </div>
-    </CalcCard>
+      </CalcCard>
+    </div>
   );
 }

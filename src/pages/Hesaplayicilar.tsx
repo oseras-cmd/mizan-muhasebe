@@ -77,7 +77,7 @@ export default function Hesaplayicilar() {
     <div className="min-h-screen bg-background pl-64 text-foreground">
       <AppHeader />
 
-      <main className="mx-auto max-w-6xl px-6 pb-20 pt-10">
+      <main className="mx-auto max-w-7xl px-6 pb-20 pt-10 lg:px-8">
         {/* Sayfa başlığı */}
         <div>
           <p className="text-xs font-medium tracking-[0.14em] text-muted-foreground">
@@ -144,14 +144,14 @@ export default function Hesaplayicilar() {
         </section>
 
         {/* Sekmeler */}
-        <div className="mt-8 flex gap-1 overflow-x-auto border-b border-border/70 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div className="mt-8 flex flex-wrap gap-1 border-b border-border/70">
           {TABS.map((tab) => (
             <button
               key={tab.id}
               type="button"
               onClick={() => setActive(tab.id)}
               className={cn(
-                "flex shrink-0 items-center gap-1.5 border-b-2 px-3 py-2.5 text-sm font-medium transition-colors",
+                "flex shrink-0 items-center gap-1.5 border-b-2 px-3.5 py-2.5 text-sm font-medium transition-colors",
                 active === tab.id
                   ? "border-foreground text-foreground"
                   : "border-transparent text-muted-foreground hover:text-foreground",

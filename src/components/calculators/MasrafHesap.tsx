@@ -7,7 +7,6 @@ import { cn } from "@/lib/utils";
 import {
   Calculator,
   Plus,
-  Printer,
   RotateCcw,
   Trash2,
   ReceiptText,
@@ -17,59 +16,61 @@ import {
   X,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { CalcCard, Field, ResultBox, ResultRow, ResultTotalRow, formatNumber } from "./shared";
+import { CalcCard, Field, PrintButton, PrintHeader, ResultBox, ResultRow, ResultTotalRow, formatNumber } from "./shared";
 
 /* ─── Sabitler ─── */
 const MASRAF_TURLERI = [
-  "ARAÇ YAKIT GİDERİ",
-  "ARAÇ OTOPARK VE VİZYÖR",
-  "ARAÇ TAMİR VE BAKIM",
-  "MUTFAK YİYECEK VE İÇECEK",
-  "MUTFAK SARF MALZEME",
-  "YİYECEK İÇECEK GİDERİ",
-  "TEMSİLCİLİK İKRAM VE YEMEK",
-  "ÖZEL İLETİŞİM GİDERLERİ",
-  "İŞ TEKNİK BAKIM",
-  "PT. KARGO, KOLİ",
-  "KIRTASİYE VE MATBAA",
-  "YURT İÇİ SEYAHAT VE KONAKLAMA",
-  "YURT DIŞI SEYAHAT VE KONAKLAMA",
-  "TEMİZLİK VE SARF MALZEME",
-  "MUHASEBE VE DANIŞMANLIK",
-  "DİĞER VERGİ VE RESİMLER",
-  "İLAN REKLAM VE TANITIM",
-  "SAĞLIK GİDERLERİ",
-  "669 KANUNEN KABUL EDİLMEYEN",
-  "DİĞER",
+  "Araç Yakıt Gideri",
+  "Araç Otopark ve Viyadük",
+  "Araç Tamir ve Bakım",
+  "Mutfak Yiyecek ve İçecek",
+  "Mutfak Sarf Malzeme",
+  "Yiyecek İçecek Gideri",
+  "Temsilcilik İkram ve Yemek",
+  "Özel İletişim Giderleri",
+  "İş Teknik Bakım",
+  "PTT Kargo, Koli",
+  "Kırtasiye ve Matbaa",
+  "Yurt İçi Seyahat ve Konaklama",
+  "Yurt Dışı Seyahat ve Konaklama",
+  "Temizlik ve Sarf Malzeme",
+  "Muhasebe ve Danışmanlık",
+  "Diğer Vergi ve Resimler",
+  "İlan, Reklam ve Tanıtım",
+  "Sağlık Giderleri",
+  "Kanunen Kabul Edilmeyen (669)",
+  "Diğer",
 ] as const;
 
 const BELGE_TURLERI = [
-  "FATURA",
-  "FİŞ",
-  "MAKBUZ",
-  "İRSALİYE",
-  "DEKONT",
-  "DİĞER",
+  "Fatura",
+  "Fiş",
+  "Makbuz",
+  "İrsaliye",
+  "Dekont",
+  "Diğer",
 ] as const;
 
 const KDV_ORANLARI = [0, 1, 10, 20] as const;
 
 const ODEME_TURLERI = [
-  "NAKİT",
-  "KREDİ KARTI",
-  "HAVALE / EFT",
-  "ÇEK",
-  "DİĞER",
+  "Nakit",
+  "Kredi Kartı",
+  "Havale / EFT",
+  "Çek",
+  "Diğer",
 ] as const;
 
 const MASRAF_MERKEZLERI = [
-  "MESKUR",
-  "GENEL",
-  "İDARİ",
-  "SATIŞ",
-  " ÜRETİM",
-  "DİĞER",
+  "Genel",
+  "İdari",
+  "Satış",
+  "Üretim",
+  "Diğer",
 ] as const;
+
+/** Şirket seçimi opsiyoneldir — zorunlu değildir. */
+const SIRKETLER = ["Ferla", "Meskur"] as const;
 
 /* ─── Tip ─── */
 interface MasrafItem {
@@ -83,6 +84,9 @@ interface MasrafItem {
   fisToplam: number;
   odemeTuru: string;
   masrafMerkez: string;
+  sirket: string;
+  fisFirma: string;
+  vergiNo: string;
   aracPlaka: string;
   kkeg: number;
 }
@@ -109,18 +113,68 @@ const DEFAULT_FIRMA: FirmaBilgileri = {
 };
 
 const EMPTY_ITEM: Omit<MasrafItem, "id"> = {
-  belgeTipi: "FATURA",
+  belgeTipi: "Fatura",
   masrafAdi: "",
   masrafTuru: MASRAF_TURLERI[0],
   faturaFisNo: "",
   belgeTarihi: new Date().toISOString().slice(0, 10),
   kdvOrani: 20,
   fisToplam: 0,
-  odemeTuru: "HAVALE / EFT",
-  masrafMerkez: "MESKUR",
+  odemeTuru: "Havale / EFT",
+  masrafMerkez: "Genel",
+  sirket: "",
+  fisFirma: "",
+  vergiNo: "",
   aracPlaka: "",
   kkeg: 0,
 };
+
+/* ─── Eski (büyük harfli) kayıtları yeni başlıklara çevir ─── */
+function normTr(value: string): string {
+  return value.trim().toLocaleUpperCase("tr-TR");
+}
+
+/** Eskiden yanlış yazılmış türlerin yeni karşılıkları */
+const TUR_ESLEME: Record<string, string> = {
+  "ARAÇ OTOPARK VE VİZYÖR": "Araç Otopark ve Viyadük",
+  "PT. KARGO, KOLİ": "PTT Kargo, Koli",
+  "İLAN REKLAM VE TANITIM": "İlan, Reklam ve Tanıtım",
+  "669 KANUNEN KABUL EDİLMEYEN": "Kanunen Kabul Edilmeyen (669)",
+};
+
+const TUR_HARITA = new Map(MASRAF_TURLERI.map((t) => [normTr(t), t] as const));
+const BELGE_HARITA = new Map(BELGE_TURLERI.map((t) => [normTr(t), t] as const));
+const ODEME_HARITA = new Map(ODEME_TURLERI.map((t) => [normTr(t), t] as const));
+const MERKEZ_HARITA = new Map(MASRAF_MERKEZLERI.map((t) => [normTr(t), t] as const));
+
+function duzelt(value: string, harita: Map<string, string>, yedek: string): string {
+  const n = normTr(value);
+  if (n === "") return yedek;
+  return harita.get(n) ?? yedek;
+}
+
+/** Eski kayıtları yeni alan/başlık yapısına taşır. */
+function normalizeItem(raw: MasrafItem): MasrafItem {
+  const turN = normTr(raw.masrafTuru ?? "");
+  const merkezEski = normTr(raw.masrafMerkez ?? "");
+  let sirket = (raw.sirket ?? "").trim();
+  let merkez = duzelt(raw.masrafMerkez ?? "", MERKEZ_HARITA, "Genel");
+  // Eski sürümde şirket bilgisi masraf merkezine yazılıyordu — Şirket alanına taşı.
+  if (!sirket && (merkezEski === "MESKUR" || merkezEski === "FERLA")) {
+    sirket = merkezEski === "MESKUR" ? "Meskur" : "Ferla";
+    merkez = "Genel";
+  }
+  return {
+    ...raw,
+    belgeTipi: duzelt(raw.belgeTipi ?? "", BELGE_HARITA, "Fatura"),
+    masrafTuru: TUR_ESLEME[turN] ?? TUR_HARITA.get(turN) ?? "Diğer",
+    odemeTuru: duzelt(raw.odemeTuru ?? "", ODEME_HARITA, "Havale / EFT"),
+    masrafMerkez: merkez,
+    sirket,
+    fisFirma: (raw.fisFirma ?? "").trim(),
+    vergiNo: (raw.vergiNo ?? "").trim(),
+  };
+}
 
 /* ─── Kalıcılık (localStorage) — çıkış/yenileme sonrası veriler korunur ─── */
 const MASRAF_STORAGE_KEY = "mizan-masraf-data-v1";
@@ -140,7 +194,7 @@ function loadMasrafData(): MasrafStorage {
         const maxId = parsed.items.reduce((max, i) => Math.max(max, i.id ?? 0), 0);
         return {
           firma: { ...DEFAULT_FIRMA, ...parsed.firma },
-          items: parsed.items,
+          items: parsed.items.map(normalizeItem),
           nextId: typeof parsed.nextId === "number" && parsed.nextId > maxId ? parsed.nextId : maxId + 1,
         };
       }
@@ -280,7 +334,7 @@ export function MasrafHesap() {
     const item = items.find((i) => i.id === id);
     if (!item) return;
     const { id: _id, ...rest } = item;
-    setForm({ ...rest });
+    setForm({ ...EMPTY_ITEM, ...rest });
     setEditingId(id);
     setError(null);
   };
@@ -313,7 +367,6 @@ export function MasrafHesap() {
   };
 
   /* ─── Yazdır ─── */
-  const handlePrint = () => window.print();
 
   /* ─── Dağılım tablosunda sadece kullanılan türleri göster ─── */
   const kullanilanTurler = useMemo(() => {
@@ -322,7 +375,20 @@ export function MasrafHesap() {
   }, [items]);
 
   return (
-    <div className="space-y-6">
+    <div className="print-area space-y-6">
+      <PrintHeader
+        title="Masraf Listesi Raporu"
+        subtitle={
+          [
+            firma.firmaAdi || null,
+            firma.sirket || null,
+            `${firma.belgeTarihi ? new Date(firma.belgeTarihi).toLocaleDateString("tr-TR") : ""}`,
+            `${items.length} belge · Toplam ${fmt(hesaplamalar.genelToplam)} ₺`,
+          ]
+            .filter(Boolean)
+            .join(" · ") || undefined
+        }
+      />
       {/* Firma Bilgileri + Ekleme Formu */}
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Firma Bilgileri */}
@@ -348,7 +414,7 @@ export function MasrafHesap() {
               <Input
                 value={firma.sirket}
                 onChange={(e) => setFirma({ ...firma, sirket: e.target.value })}
-                placeholder="Örn. MESKUR KURUMSAL A.Ş."
+                placeholder="Örn. Ferla Kurumsal A.Ş."
                 className="h-9 text-sm"
               />
             </Field>
@@ -385,16 +451,14 @@ export function MasrafHesap() {
         <CalcCard
           title={editingId !== null ? "Masrafı Düzenle" : "Masraf Ekle"}
           subtitle={editingId !== null ? "Değişiklikleri kaydedin veya iptal edin" : "Yeni masraf kalemi ekleyin"}
+          className="print-hide"
           actions={
             <div className="flex items-center gap-2">
               <Button variant="ghost" size="sm" className="gap-1.5 text-xs" onClick={handleReset}>
                 <RotateCcw className="size-3.5" />
                 Sıfırla
               </Button>
-              <Button variant="ghost" size="sm" className="gap-1.5 text-xs" onClick={handlePrint}>
-                <Printer className="size-3.5" />
-                Yazdır
-              </Button>
+              <PrintButton />
             </div>
           }
         >
@@ -476,7 +540,7 @@ export function MasrafHesap() {
               </Field>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-3 gap-3">
               <Field label="Ödeme Türü">
                 <select
                   value={form.odemeTuru}
@@ -498,6 +562,37 @@ export function MasrafHesap() {
                     <option key={m} value={m}>{m}</option>
                   ))}
                 </select>
+              </Field>
+              <Field label="Şirket (Opsiyonel)">
+                <select
+                  value={form.sirket}
+                  onChange={(e) => setForm({ ...form, sirket: e.target.value })}
+                  className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm outline-none focus-visible:border-ring"
+                >
+                  <option value="">— Seçilmedi —</option>
+                  {SIRKETLER.map((s) => (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
+                </select>
+              </Field>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Fişin Alındığı Firma">
+                <Input
+                  value={form.fisFirma}
+                  onChange={(e) => setForm({ ...form, fisFirma: e.target.value })}
+                  placeholder="Örn. Opet Petrol"
+                  className="h-9 text-sm"
+                />
+              </Field>
+              <Field label="Vergi Numarası">
+                <Input
+                  value={form.vergiNo}
+                  onChange={(e) => setForm({ ...form, vergiNo: e.target.value })}
+                  placeholder="Örn. 1234567890"
+                  className="h-9 text-sm"
+                />
               </Field>
             </div>
 
@@ -625,6 +720,9 @@ export function MasrafHesap() {
                   <th className="px-2 py-2 text-right">KKEG</th>
                   <th className="px-2 py-2">Ödeme</th>
                   <th className="px-2 py-2">Merkez</th>
+                  <th className="px-2 py-2">Şirket</th>
+                  <th className="px-2 py-2">Fiş Firması</th>
+                  <th className="px-2 py-2">Vergi No</th>
                   <th className="px-2 py-2 text-center w-14">İşlem</th>
                 </tr>
               </thead>
@@ -672,6 +770,9 @@ export function MasrafHesap() {
                       </td>
                       <td className="px-2 py-2 text-muted-foreground">{item.odemeTuru}</td>
                       <td className="px-2 py-2 text-muted-foreground">{item.masrafMerkez}</td>
+                      <td className="px-2 py-2 text-muted-foreground">{item.sirket || "—"}</td>
+                      <td className="px-2 py-2 text-muted-foreground max-w-[140px] truncate">{item.fisFirma || "—"}</td>
+                      <td className="px-2 py-2 tabular-nums text-muted-foreground">{item.vergiNo || "—"}</td>
                       <td className="px-2 py-2 text-center">
                         <div className="flex items-center justify-center gap-0.5">
                           <Button
@@ -700,12 +801,12 @@ export function MasrafHesap() {
               </tbody>
               <tfoot>
                 <tr className="border-t-2 border-border font-semibold text-foreground">
-                  <td colSpan={7} className="px-2 py-2.5 text-right text-xs">TOPLAM</td>
+                  <td colSpan={7} className="px-2 py-2.5 text-right text-xs">Toplam</td>
                   <td className="px-2 py-2.5 text-right tabular-nums text-sm">{fmt(hesaplamalar.toplamFis)}</td>
                   <td className="px-2 py-2.5 text-right tabular-nums text-sm">{fmt(hesaplamalar.toplamMatrah)}</td>
                   <td className="px-2 py-2.5 text-right tabular-nums text-sm text-orange-600">{fmt(hesaplamalar.toplamKdv)}</td>
                   <td className="px-2 py-2.5 text-right tabular-nums text-sm">{fmt(hesaplamalar.toplamKkeg)}</td>
-                  <td colSpan={2}></td>
+                  <td colSpan={5}></td>
                 </tr>
               </tfoot>
             </table>
@@ -719,7 +820,7 @@ export function MasrafHesap() {
           title="Masraf Dağılımı"
           subtitle="Masraf türüne göre KDV ve matrah dağılımı"
           actions={
-            <FileSpreadsheet className="size-4 text-muted-foreground" />
+            <FileSpreadsheet className="size-4 text-muted-foreground print-hide" />
           }
         >
           <div className="overflow-x-auto">
@@ -804,7 +905,7 @@ export function MasrafHesap() {
 
       {/* Boş durum */}
       {items.length === 0 && (
-        <div className="rounded-lg border border-dashed bg-card px-6 py-16 text-center">
+        <div className="print-hide rounded-lg border border-dashed bg-card px-6 py-16 text-center">
           <ReceiptText className="mx-auto size-8 text-muted-foreground/40" />
           <p className="mt-3 text-sm font-medium text-foreground">Henüz masraf eklenmedi</p>
           <p className="mt-1 text-xs text-muted-foreground">

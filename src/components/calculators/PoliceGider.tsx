@@ -20,14 +20,13 @@ import { cn } from "@/lib/utils";
 import {
   Calculator,
   FileDown,
-  Printer,
   Save,
   Scale,
   Trash2,
 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
-import { CalcCard, Field, InfoNote, formatNumber } from "./shared";
+import { CalcCard, Field, InfoNote, PrintButton, PrintHeader, formatNumber } from "./shared";
 
 const EXPENSE_ACCOUNTS = [
   { value: "770", label: "770 — Genel Yönetim Giderleri" },
@@ -146,7 +145,12 @@ export function PoliceGider() {
   for (const row of rows) { quarterTotals[row.periodLabel] = (quarterTotals[row.periodLabel] ?? 0) + row.amount; }
 
   return (
-    <CalcCard title="Aylık Poliçe Gider Dağılımı" subtitle="Yıllık poliçe tutarının aylara ve muhasebe hesaplarına göre dağılımı (770 · 180 · 280)">
+    <div className="print-area">
+      <PrintHeader
+        title="Poliçe Gider Dağılım Raporu"
+        subtitle={schedule ? `${type} · ${number || "Poliçe yok"} · ${startDate}` : undefined}
+      />
+      <CalcCard title="Aylık Poliçe Gider Dağılımı" subtitle="Yıllık poliçe tutarının aylara ve muhasebe hesaplarına göre dağılımı (770 · 180 · 280)">
       <div className="grid gap-6">
         <div className="grid gap-5 sm:grid-cols-2">
           <Field label="Poliçe Türü">
@@ -171,7 +175,7 @@ export function PoliceGider() {
             <Input value={number} onChange={(e) => setNumber(formatInputValue(e.target.value))} placeholder="Örn: 2025/001" />
           </Field>
           <Field label="Başlangıç Tarihi">
-            <Input type="date" value={startDate} onChange={(e) => setStartDate(formatInputValue(e.target.value))} required />
+            <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} required />
           </Field>
           <Field label="Brüt Poliçe Tutarı (₺)">
             <Input type="text" inputMode="decimal" value={amount} onChange={(e) => setAmount(formatInputValue(e.target.value))} placeholder="0,00" className="tabular-nums" required />
@@ -182,7 +186,7 @@ export function PoliceGider() {
           <Button type="button" onClick={compute}><Calculator className="mr-2 size-4" />Hesapla</Button>
           <Button type="button" variant="outline" onClick={handleSave}><Save className="mr-2 size-4" />Kaydet</Button>
           <Button type="button" variant="outline" onClick={exportCsv}><FileDown className="mr-2 size-4" />Excel</Button>
-          <Button type="button" variant="outline" onClick={() => window.print()}><Printer className="mr-2 size-4" />Yazdır</Button>
+          <PrintButton className="h-9" />
           <Button type="button" variant="outline" onClick={handleCompare}><Scale className="mr-2 size-4" />Karşılaştır</Button>
         </div>
 
@@ -307,7 +311,8 @@ export function PoliceGider() {
           <strong>ÖNEMLİ:</strong> Binek araç poliçelerinde tutarın %30'u K.K.E.G. (689 hesabı) olarak ayrılır. İlk ay gideri seçilen hesaba (770/730/740/760), sonraki aylar 180 hesabına, yıl dönümünde (Ocak) ise 280 hesabına aktarılır. Hesaplama Burhan ERAY / TÜRMOB standartlarına göredir.
         </InfoNote>
       </div>
-    </CalcCard>
+      </CalcCard>
+    </div>
   );
 }
 

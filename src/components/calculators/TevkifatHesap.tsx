@@ -9,7 +9,7 @@ import {
 } from "@/components/ui/select";
 import { formatTRY, parseTurkishNumber } from "@/lib/finance/format";
 import { useMemo, useState } from "react";
-import { CalcCard, Field, InfoNote } from "./shared";
+import { CalcCard, Field, InfoNote, PrintButton, PrintHeader } from "./shared";
 
 /* ─── Tevkifat Oranları — KDV Tebliği Seri No 1 ────────── */
 const TEVKIFAT_OPTIONS = [
@@ -168,10 +168,16 @@ export function TevkifatHesap() {
   const option = TEVKIFAT_OPTIONS[Number(tevIndex)] ?? TEVKIFAT_OPTIONS[0];
 
   return (
-    <CalcCard
-      title="KDV Tevkifat Hesaplama"
-      subtitle="TÜRMOB / GİB — Satış ve alış yönünde tevkifat, beyanname ve bildirim hesaplamaları"
-    >
+    <div className="print-area">
+      <PrintHeader
+        title="KDV Tevkifat Hesaplama Raporu"
+        subtitle={result ? `Matrah ${formatTRY(result.kdvHaric)} · KDV %${result.kdvOrani * 100} · Tevkifat ${option.label}` : undefined}
+      />
+      <CalcCard
+        title="KDV Tevkifat Hesaplama"
+        subtitle="TÜRMOB / GİB — Satış ve alış yönünde tevkifat, beyanname ve bildirim hesaplamaları"
+        actions={<PrintButton />}
+      >
       <div className="grid gap-6">
         {/* ─── Girdiler ─── */}
         <div className="grid gap-5 sm:grid-cols-3">
@@ -438,6 +444,7 @@ export function TevkifatHesap() {
           </>
         )}
       </div>
-    </CalcCard>
+      </CalcCard>
+    </div>
   );
 }

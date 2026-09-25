@@ -12,7 +12,7 @@ import { parseTurkishNumber } from "@/lib/finance/format";
 import { convertRate, type RateSnapshot } from "@/lib/finance/rates";
 import { ArrowLeftRight } from "lucide-react";
 import { useState } from "react";
-import { CalcCard, Field, InfoNote, formatNumber } from "./shared";
+import { CalcCard, Field, InfoNote, PrintButton, PrintHeader, formatNumber } from "./shared";
 
 const CURRENCIES = [
   { code: "TRY", label: "Türk Lirası" },
@@ -54,6 +54,9 @@ export function KurCevir({ snapshot }: { snapshot: RateSnapshot | null }) {
       ? convertRate(snapshot.rates, from, to, 1)
       : null;
 
+  /** EUR/USD paritesi — 1 € kaç $ eder (canlı kurlardan türetilir). */
+  const parite = hasRates ? convertRate(snapshot.rates, "EUR", "USD", 1) : null;
+
   const swap = () => {
     setFrom(to);
     setTo(from);
@@ -63,10 +66,16 @@ export function KurCevir({ snapshot }: { snapshot: RateSnapshot | null }) {
   const unitMax = 4;
 
   return (
-    <CalcCard
-      title="Kur Çevirici"
-      subtitle="Canlı kurlarla para birimi dönüştürün"
-    >
+    <div className="print-area">
+      <PrintHeader
+        title="Kur Çevirme Raporu"
+        subtitle={result !== null ? `${from} → ${to} dönüşümü` : undefined}
+      />
+      <CalcCard
+        title="Kur Çevirici"
+        subtitle="Canlı kurlarla para birimi dönüştürün"
+        actions={<PrintButton />}
+      >
       <div className="grid gap-6">
         <div className="grid items-end gap-5 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_auto_1fr]">
           <Field label="Miktar">
@@ -129,6 +138,11 @@ export function KurCevir({ snapshot }: { snapshot: RateSnapshot | null }) {
               ? `1 ${from} = ${withSymbol(to, unit, unitMax)} ${to}`
               : "Kurlar yüklenemedi — sayfayı yenileyin veya Yenile butonunu kullanın"}
           </p>
+          {parite !== null && (
+            <p className="mt-1 font-mono text-sm tabular-nums text-muted-foreground">
+              EUR/USD Paritesi: {formatNumber(parite, 4, 4)} — 1 € = {formatNumber(parite, 2, 4)} $
+            </p>
+          )}
         </div>
 
         {!hasRates && (
@@ -138,6 +152,7 @@ export function KurCevir({ snapshot }: { snapshot: RateSnapshot | null }) {
           </InfoNote>
         )}
       </div>
-    </CalcCard>
+      </CalcCard>
+    </div>
   );
 }

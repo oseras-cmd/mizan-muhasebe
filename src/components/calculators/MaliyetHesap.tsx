@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { formatTRY, parseTurkishNumber } from "@/lib/finance/format";
 import { useMemo, useState } from "react";
-import { CalcCard, Field, ResultBox, ResultRow, ResultTotalRow } from "./shared";
+import { CalcCard, Field, PrintButton, PrintHeader, ResultBox, ResultRow, ResultTotalRow } from "./shared";
 
 export function MaliyetHesap() {
   const [alis, setAlis] = useState("10000");
@@ -33,10 +33,16 @@ export function MaliyetHesap() {
   }, [alis, nakliye, gumruk, diger, adet, iskonto, kdvli]);
 
   return (
-    <CalcCard
-      title="Maliyet Hesaplama"
-      subtitle="Alış, nakliye ve diğer giderlerle birim maliyet ve kârlı satış fiyatı"
-    >
+    <div className="print-area">
+      <PrintHeader
+        title="Maliyet Hesaplama Raporu"
+        subtitle={result ? `Birim maliyet ${formatTRY(result.birim)} · ${adet} adet` : undefined}
+      />
+      <CalcCard
+        title="Maliyet Hesaplama"
+        subtitle="Alış, nakliye ve diğer giderlerle birim maliyet ve kârlı satış fiyatı"
+        actions={<PrintButton />}
+      >
       <div className="grid gap-6">
         <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
           <Field label="Alış Fiyatı (₺)">
@@ -131,6 +137,7 @@ export function MaliyetHesap() {
           />
         </ResultBox>
       </div>
-    </CalcCard>
+      </CalcCard>
+    </div>
   );
 }
