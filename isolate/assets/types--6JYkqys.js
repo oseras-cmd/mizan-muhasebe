@@ -1,0 +1,1 @@
+const e={yok:"Tekrar yok",gunluk:"Her gün",haftalik:"Her hafta",aylik:"Her ay",yillik:"Her yıl"},t={0:"text-red-500",1:"text-red-500",2:"text-orange-500",3:"text-blue-500",4:"text-muted-foreground"},a=["Fatura","Sözleşme","Makbuz","Dekont","Beyanname","Diğer"];export{a as D,e as R,t as T};
