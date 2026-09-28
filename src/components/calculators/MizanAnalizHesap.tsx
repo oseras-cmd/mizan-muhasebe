@@ -1,12 +1,19 @@
 import { formatInputValue, parseTurkishNumber } from "@/lib/finance/format";
+import { useFinanceData } from "@/lib/finance/store";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useMemo, useRef, useState } from "react";
 import { CalcCard, Field, PrintHeader, InfoNote } from "./shared";
 import { analizMizan, type MizanSatir } from "./engine/calcEngine";
+import {
+  KATEGORI_ETIKET,
+  SEVIYE_ETIKET,
+  kontrolAsistani,
+  type KontrolBulgu,
+} from "./engine/kontrolAsistani";
 import { ExportButtons } from "./engine/ExportButtons";
-import { Plus, Trash2, Upload } from "lucide-react";
+import { Plus, ShieldCheck, Trash2, Upload } from "lucide-react";
 import { cn } from "@/lib/utils";
 import * as XLSX from "xlsx";
 
@@ -28,8 +35,40 @@ export function MizanAnalizHesap() {
   const [excelHata, setExcelHata] = useState<string | null>(null);
   const [yukleniyor, setYukleniyor] = useState(false);
   const areaRef = useRef<HTMLDivElement>(null);
+  const data = useFinanceData();
 
   const analiz = useMemo(() => analizMizan(rows.filter((r) => r.hesap.trim() !== "")), [rows]);
+
+  // Muhasebe kontrol asistanı: mizan + kayıtlı fiş/fatura/belge verisini tarar.
+  // Yalnızca öneri üretir; store'a hiçbir yazma yapmaz.
+  const asistan = useMemo(
+    () =>
+      kontrolAsistani({
+        transactions: data.transactions,
+        invoices: data.invoices,
+        documents: data.documents,
+        transfers: data.transfers,
+        accounts: data.accounts,
+        contacts: data.contacts,
+        mizan: rows.filter((r) => r.hesap.trim() !== ""),
+      }),
+    [data, rows],
+  );
+  const asistanSayi = useMemo(
+    () => ({
+      kritik: asistan.filter((b) => b.seviye === "kritik").length,
+      uyari: asistan.filter((b) => b.seviye === "uyari").length,
+      bilgi: asistan.filter((b) => b.seviye === "bilgi").length,
+    }),
+    [asistan],
+  );
+
+  const seviyeSinif = (s: KontrolBulgu["seviye"]) =>
+    s === "kritik"
+      ? "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300"
+      : s === "uyari"
+        ? "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300"
+        : "bg-muted text-muted-foreground";
 
   const fmt = (v: number) => v.toLocaleString("tr-TR", { minimumFractionDigits: 2 });
 
@@ -92,6 +131,18 @@ export function MizanAnalizHesap() {
     { title: "Riskli Hesaplar (Vergi İnceleme Riski)", headers: ["Hesap", "Hesap Adı", "Bakiye", "Risk", "Açıklama"], rows: analiz.riskli.map((u) => [u.hesap, u.ad, +u.bakiye.toFixed(2), u.seviye === "yuksek" ? "Yüksek" : "Orta", u.detay]) },
     { title: "KDV Analizi", headers: ["Kontrol", "Durum", "Açıklama"], rows: analiz.kdvKontroller.map((k) => [k.kontrol, k.durum === "ok" ? "Uygun" : k.durum === "uyari" ? "UYARI" : "Bilgi", k.aciklama]) },
     {
+      title: "Muhasebe Kontrol Asistanı",
+      headers: ["Seviye", "Kategori", "Bulgu", "Açıklama", "Öneri"],
+      rows: asistan.map((b) => [
+        SEVIYE_ETIKET[b.seviye],
+        KATEGORI_ETIKET[b.kategori],
+        b.baslik,
+        b.detay,
+        b.oneri,
+      ]),
+      footers: ["Asistan yalnızca öneri üretir; hiçbir finansal kaydı değiştirmez."],
+    },
+    {
       title: "Genel Mizan Tablosu",
       headers: ["Hesap Kodu", "Hesap Adı", "Borç Toplamı", "Alacak Toplamı", "Borç Bakiye", "Alacak Bakiye"],
       rows: rows.filter((r) => r.hesap.trim()).map((r) => [r.hesap, r.ad, r.borcToplam, r.alacakToplam, r.borcBakiye, r.alacakBakiye]),
@@ -127,6 +178,7 @@ export function MizanAnalizHesap() {
           <TabsList className="print-hide">
             <TabsTrigger value="giris">Veri Girişi</TabsTrigger>
             <TabsTrigger value="sonuc">Analiz Sonucu</TabsTrigger>
+            <TabsTrigger value="asistan">Kontrol Asistanı</TabsTrigger>
           </TabsList>
 
           <TabsContent value="giris" className="mt-4 grid gap-5">
@@ -359,6 +411,78 @@ export function MizanAnalizHesap() {
               Mizan verileri tarayıcınızdan çıkmaz; dosya yükleme tamamen istemci tarafında işlenir.
               100 Kasa üzerinde 500.000 TL bakiye, 131/231 ortaklardan alacaklar, 331 ortaklara borçlar ve 7xx
               yansıtma hesaplarındaki bakiyeler vergi incelemesinde özellikle incelenir.
+            </InfoNote>
+          </TabsContent>
+
+          <TabsContent value="asistan" className="mt-4 grid gap-6">
+            {/* Özet kutuları */}
+            <div className="grid gap-px overflow-hidden rounded-lg border bg-border sm:grid-cols-4">
+              {[
+                { label: "Toplam Bulgu", v: String(asistan.length), cls: asistan.length ? "text-foreground" : "text-emerald-600" },
+                { label: "Kritik", v: String(asistanSayi.kritik), cls: asistanSayi.kritik ? "text-red-600" : "text-emerald-600" },
+                { label: "Uyarı", v: String(asistanSayi.uyari), cls: asistanSayi.uyari ? "text-amber-600" : "text-emerald-600" },
+                { label: "Bilgi", v: String(asistanSayi.bilgi), cls: "text-muted-foreground" },
+              ].map((x) => (
+                <div key={x.label} className="bg-card px-4 py-3">
+                  <p className="text-xs text-muted-foreground">{x.label}</p>
+                  <p className={cn("mt-1 font-mono text-xl font-semibold tabular-nums", x.cls)}>{x.v}</p>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex items-start gap-3 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/50 dark:text-emerald-200">
+              <ShieldCheck className="mt-0.5 size-4 shrink-0" />
+              <p>
+                <strong>Kontrol Asistanı</strong> dengesiz fişleri, mükerrer belgeleri, olağandışı
+                tutarları ve eksik kayıtları tarar; yalnızca öneri sunar. Hiçbir finansal kaydı
+                değiştirmez, silmez veya oluşturmaz — karar ve onay her zaman sizde.
+              </p>
+            </div>
+
+            {asistan.length === 0 ? (
+              <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+                Kontrol edilecek bir sorun tespit edilmedi. Tebrikler!
+              </p>
+            ) : (
+              <div className="overflow-x-auto rounded-lg border">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-muted/50 text-left text-xs uppercase tracking-wide text-muted-foreground">
+                      <th className="px-3 py-2 font-medium">Seviye</th>
+                      <th className="px-3 py-2 font-medium">Kategori</th>
+                      <th className="px-3 py-2 font-medium">Bulgu</th>
+                      <th className="px-3 py-2 font-medium">Açıklama</th>
+                      <th className="px-3 py-2 font-medium">Öneri</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {asistan.map((b, i) => (
+                      <tr key={i} className="border-t align-top">
+                        <td className="px-3 py-2">
+                          <span className={cn("rounded px-1.5 py-0.5 text-[10px] font-semibold", seviyeSinif(b.seviye))}>
+                            {SEVIYE_ETIKET[b.seviye].toUpperCase()}
+                          </span>
+                        </td>
+                        <td className="px-3 py-2 text-xs">{KATEGORI_ETIKET[b.kategori]}</td>
+                        <td className="px-3 py-2 text-xs font-medium">
+                          {b.baslik}
+                          {b.adet && b.adet > 1 && (
+                            <span className="ml-1 text-muted-foreground">({b.adet})</span>
+                          )}
+                        </td>
+                        <td className="px-3 py-2 text-xs">{b.detay}</td>
+                        <td className="px-3 py-2 text-xs text-muted-foreground">{b.oneri}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            <InfoNote>
+              Asistan; mizan (yüklediğiniz dosya), kasa/banka fişleri, faturalar, cariler ve belge
+              okuma taslaklarını birlikte kontrol eder. Eşikler istatistiksel olarak belirlenir
+              (kategori içi 3× IQR) ve sonuçlar bilgilendirme amaçlıdır; resmî beyanname yerine geçmez.
             </InfoNote>
           </TabsContent>
         </Tabs>

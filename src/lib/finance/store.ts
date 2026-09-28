@@ -4,6 +4,7 @@ import type {
   Account,
   AccountCurrency,
   AccountType,
+  BelgeOkuma,
   BudgetTarget,
   Contact,
   ContactType,
@@ -241,6 +242,8 @@ export interface NewTransactionInput {
   accountId: string;
   amount: number;
   date: string;
+  /** Onaylanan belgeden oluşturulduysa bağlı belge */
+  documentId?: string;
 }
 
 /** Gelir/gider kaydı ekler ve seçili hesabın bakiyesini anında günceller. */
@@ -248,6 +251,7 @@ export function addTransaction(input: NewTransactionInput): Transaction {
   const transaction: Transaction = {
     id: newId("tx"),
     ...input,
+    documentId: input.documentId || undefined,
   };
   const sign = input.type === "gelir" ? 1 : -1;
   setFinanceData({
@@ -1229,4 +1233,37 @@ export function updateDocument(
 export function deleteDocument(id: string) {
   setFinanceData({ ...data, documents: data.documents.filter((doc) => doc.id !== id) });
   removeDocumentDataUrl(id);
+}
+
+/* ---------------------------------- Akıllı Belge Okuma ---------------------------------- */
+
+/** Okuma sonucunu belgeye TASLAK olarak yazar.
+ *  Bu yalnızca belge üstünde bir meta alandır; finansal kayıt oluşturmaz. */
+export function setDocumentOkuma(id: string, okuma: BelgeOkuma) {
+  setFinanceData({
+    ...data,
+    documents: data.documents.map((doc) =>
+      doc.id === id
+        ? {
+            ...doc,
+            okuma,
+            okumaDurum: "taslak" as const,
+            okumaAt: new Date().toISOString(),
+          }
+        : doc,
+    ),
+  });
+}
+
+/** Okuma taslağının onay durumunu günceller (onaylı / reddedildi / taslak). */
+export function setDocumentOkumaDurum(
+  id: string,
+  durum: "taslak" | "onayli" | "reddedildi",
+) {
+  setFinanceData({
+    ...data,
+    documents: data.documents.map((doc) =>
+      doc.id === id ? { ...doc, okumaDurum: durum } : doc,
+    ),
+  });
 }

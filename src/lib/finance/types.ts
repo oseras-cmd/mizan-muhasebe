@@ -39,6 +39,8 @@ export interface Transaction {
   date: string;
   /** Fatura ödemesiyle otomatik oluşturulduysa bağlı fatura */
   invoiceId?: string;
+  /** Akıllı belge okumadan onaylanarak oluşturulduysa bağlı belge */
+  documentId?: string;
   /** Şirket etiketi (Ferla/Meskur vb., opsiyonel) */
   company?: string;
 }
@@ -265,6 +267,54 @@ export const DOCUMENT_CATEGORIES = [
 
 export type DocumentCategory = (typeof DOCUMENT_CATEGORIES)[number];
 
+/** Akıllı belge okumanın çıkarabildiği belge türleri */
+export const BELGE_TURLERI = [
+  "fatura",
+  "fis",
+  "makbuz",
+  "dekont",
+  "beyanname",
+  "diger",
+] as const;
+
+export type BelgeTuru = (typeof BELGE_TURLERI)[number];
+
+export const BELGE_TURU_ETIKET: Record<BelgeTuru, string> = {
+  fatura: "Fatura",
+  fis: "Fiş",
+  makbuz: "Makbuz",
+  dekont: "Dekont",
+  beyanname: "Beyanname",
+  diger: "Diğer",
+};
+
+/** Belgenin işletmeye yönü: gelir (satış) mi gider (alış) mı olduğu */
+export type BelgeYon = "gelir" | "gider" | "belirsiz";
+
+/** Akıllı belge okuma ile çıkarılan alanlar.
+ * Taslak durumdadır; muhasebeci onaylamadan finansal kayıt oluşturmaz. */
+export interface BelgeOkuma {
+  belgeTuru: BelgeTuru;
+  yon: BelgeYon;
+  /** ISO tarih (yyyy-aa-gg) — çıkarılamadıysa boş */
+  tarih: string;
+  cariUnvan: string;
+  cariVkn: string;
+  belgeNo: string;
+  matrah: number;
+  /** Yüzde (0, 1, 10, 20) */
+  kdvOrani: number;
+  kdvTutar: number;
+  toplamTutar: number;
+  /** Yapay zekâ güven skoru 0..1 */
+  guven: number;
+  /** Modelin notu / belirsiz kalan noktalar */
+  not: string;
+}
+
+/** Belge okuma taslağının durumu — onaylanmadan kayıt kesinleşmez */
+export type OkumaDurum = "taslak" | "onayli" | "reddedildi";
+
 /** localStorage'da base64 veri URL'si olarak saklanan yüklenmiş belge */
 export interface StoredDocument {
   id: string;
@@ -280,6 +330,10 @@ export interface StoredDocument {
   /** Base64 data URL */
   dataUrl: string;
   uploadedAt: string;
+  /** Akıllı okuma sonucu (taslak) */
+  okuma?: BelgeOkuma;
+  okumaDurum?: OkumaDurum;
+  okumaAt?: string;
 }
 
 export interface FinanceData {

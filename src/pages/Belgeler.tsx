@@ -2,29 +2,50 @@ import { AppHeader } from "@/components/AppHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { formatFullDate } from "@/lib/finance/format";
+import {
+  formatFullDate,
+  formatInputValue,
+  formatTRY,
+  parseTurkishNumber,
+  todayIso,
+} from "@/lib/finance/format";
+import { belgeOku, getGoogleApiKey, setGoogleApiKey } from "@/lib/finance/docReader";
 import {
   MAX_DOCUMENT_SIZE,
+  addContact,
   addDocument,
+  addInvoice,
+  addTransaction,
   deleteDocument,
   getDocumentDataUrl,
+  setDocumentOkuma,
+  setDocumentOkumaDurum,
   updateDocument,
   useFinanceData,
 } from "@/lib/finance/store";
 import {
+  BELGE_TURU_ETIKET,
+  BELGE_TURLERI,
   DOCUMENT_CATEGORIES,
+  KDV_RATES,
+  type BelgeOkuma,
+  type BelgeTuru,
   type DocumentCategory,
   type StoredDocument,
+  type TransactionCategory,
 } from "@/lib/finance/types";
 import { cn } from "@/lib/utils";
 import {
+  AlertTriangle,
   Download,
   ExternalLink,
   FileText,
   FolderOpen,
   Image as ImageIcon,
+  KeyRound,
   Pencil,
   Search,
+  Sparkles,
   Trash2,
   Upload,
   X,
@@ -58,6 +79,36 @@ const emptyForm: FormState = {
   category: "Diğer",
   contactId: "",
   note: "",
+};
+
+/** Akıllı okuma taslağının düzenlenebilir formu (tutarlar metin olarak tutulur). */
+interface OkumaForm {
+  tarih: string;
+  cariUnvan: string;
+  cariVkn: string;
+  belgeNo: string;
+  belgeTuru: BelgeTuru;
+  /** "" = seçilmemiş — onay için gelir/gider seçilmek zorunda */
+  yon: "" | "gelir" | "gider";
+  matrah: string;
+  kdvOrani: string;
+  kdvTutar: string;
+  toplamTutar: string;
+  hesapId: string;
+}
+
+const bosOkumaForm: OkumaForm = {
+  tarih: "",
+  cariUnvan: "",
+  cariVkn: "",
+  belgeNo: "",
+  belgeTuru: "diger",
+  yon: "",
+  matrah: "",
+  kdvOrani: "0",
+  kdvTutar: "",
+  toplamTutar: "",
+  hesapId: "",
 };
 
 /** Dosyayı data URL'e çevirir; büyük dosyalarda arayüzü bloklamaz. */
@@ -101,6 +152,16 @@ export default function Belgeler() {
   const [editForm, setEditForm] = useState<FormState>(emptyForm);
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+
+  // Akıllı belge okuma
+  const [okuyorId, setOkuyorId] = useState<string | null>(null);
+  const [okumaDoc, setOkumaDoc] = useState<StoredDocument | null>(null);
+  const [okumaMod, setOkumaMod] = useState<"key" | "taslak">("key");
+  const [anahtarInput, setAnahtarInput] = useState("");
+  const [bekleyenId, setBekleyenId] = useState<string | null>(null);
+  const [okuSonra, setOkuSonra] = useState(true);
+  const [dupeOnay, setDupeOnay] = useState(false);
+  const [oForm, setOForm] = useState<OkumaForm>(bosOkumaForm);
 
   // Önizleme modalı
   const [previewDoc, setPreviewDoc] = useState<StoredDocument | null>(null);
@@ -178,7 +239,7 @@ export default function Belgeler() {
     setUploading(true);
     try {
       const dataUrl = selectedFileData ?? (await readFileAsDataUrl(selectedFile));
-      addDocument({
+      const yeni = addDocument({
         name: form.name || selectedFile.name,
         category: form.category,
         contactId: form.contactId || undefined,
@@ -190,6 +251,8 @@ export default function Belgeler() {
       });
       toast.success("Belge kaydedildi.");
       resetUploadForm();
+      // Akıllı okuma açıksa belgeyi hemen okut (anahtar yoksa anahtar istemi açılır)
+      if (okuSonra) void belgeyiOku(yeni);
     } catch (error) {
       if (error instanceof Error && error.message === "DOC_STORAGE_FULL") {
         toast.error(
@@ -201,6 +264,259 @@ export default function Belgeler() {
     } finally {
       setUploading(false);
     }
+  };
+
+  /* ---------------------- Akıllı belge okuma akışı ---------------------- */
+
+  const okumaModalDoc = okumaDoc
+    ? (data.documents.find((d) => d.id === okumaDoc.id) ?? okumaDoc)
+    : null;
+
+  const selectSinif =
+    "flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-ring/40";
+
+  /** Sayıyı TR biçiminde forma yazar (1234,56 → 1.234,56). */
+  const formatSayi = (v: number) => formatInputValue(String(v).replace(/\./g, ","));
+
+  const okumaFormuDoldur = (okuma: BelgeOkuma, doc: StoredDocument): OkumaForm => {
+    // Model %1/%10/%20 dışındaki oran söyleyebilir — en yakın resmî orana yuvarla
+    const oranlar = [0, 1, 10, 20];
+    const enYakinOran = oranlar.reduce((prev, curr) =>
+      Math.abs(curr - okuma.kdvOrani) < Math.abs(prev - okuma.kdvOrani) ? curr : prev,
+    );
+    return {
+      tarih: okuma.tarih,
+      cariUnvan:
+        okuma.cariUnvan ||
+        data.contacts.find((c) => c.id === doc.contactId)?.name ||
+        "",
+      cariVkn: okuma.cariVkn,
+      belgeNo: okuma.belgeNo,
+      belgeTuru: okuma.belgeTuru,
+      yon: okuma.yon === "belirsiz" ? "" : okuma.yon,
+      matrah: okuma.matrah
+        ? formatInputValue(String(okuma.matrah).replace(/\./g, ","))
+        : "",
+      kdvOrani: String(enYakinOran),
+      kdvTutar: okuma.kdvTutar
+        ? formatInputValue(String(okuma.kdvTutar).replace(/\./g, ","))
+        : "",
+      toplamTutar: okuma.toplamTutar
+        ? formatInputValue(String(okuma.toplamTutar).replace(/\./g, ","))
+        : "",
+      hesapId: data.accounts[0]?.id ?? "",
+    };
+  };
+
+  const belgeyiOku = async (doc: StoredDocument) => {
+    if (!getGoogleApiKey()) {
+      setBekleyenId(doc.id);
+      setAnahtarInput("");
+      setOkumaMod("key");
+      setOkumaDoc(doc);
+      return;
+    }
+    setOkuyorId(doc.id);
+    try {
+      const dataUrl = getDocumentDataUrl(doc.id);
+      if (!dataUrl) throw new Error("Belge verisi bulunamadı.");
+      const okuma = await belgeOku(dataUrl, doc.mimeType);
+      setDocumentOkuma(doc.id, okuma);
+      setOForm(okumaFormuDoldur(okuma, doc));
+      setDupeOnay(false);
+      setOkumaMod("taslak");
+      setOkumaDoc(doc);
+      toast.success("Belge okundu. Bilgileri kontrol edip onaylayın.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Belge okunamadı.");
+    } finally {
+      setOkuyorId(null);
+    }
+  };
+
+  const okumaAc = (doc: StoredDocument) => {
+    if (doc.okuma) {
+      setOForm(okumaFormuDoldur(doc.okuma, doc));
+      setDupeOnay(false);
+      setOkumaMod("taslak");
+      setOkumaDoc(doc);
+      return;
+    }
+    void belgeyiOku(doc);
+  };
+
+  const anahtariKaydet = () => {
+    if (!anahtarInput.trim()) {
+      toast.error("Lütfen bir API anahtarı girin.");
+      return;
+    }
+    setGoogleApiKey(anahtarInput.trim());
+    setAnahtarInput("");
+    toast.success("API anahtarı kaydedildi.");
+    const bekleyen = bekleyenId
+      ? data.documents.find((d) => d.id === bekleyenId)
+      : undefined;
+    setBekleyenId(null);
+    if (bekleyen) void belgeyiOku(bekleyen);
+    else setOkumaDoc(null);
+  };
+
+  const oAlanSet = (patch: Partial<OkumaForm>) => {
+    setOForm((prev) => {
+      const next = { ...prev, ...patch };
+      const matrah = parseTurkishNumber(next.matrah) || 0;
+      const oran = parseTurkishNumber(next.kdvOrani) || 0;
+      if (patch.matrah !== undefined || patch.kdvOrani !== undefined) {
+        const kdv = Math.round(matrah * (oran / 100) * 100) / 100;
+        next.kdvTutar = kdv ? formatSayi(kdv) : "";
+        next.toplamTutar = formatSayi(Math.round((matrah + kdv) * 100) / 100);
+      } else if (patch.kdvTutar !== undefined) {
+        const kdv = parseTurkishNumber(next.kdvTutar) || 0;
+        next.toplamTutar = formatSayi(Math.round((matrah + kdv) * 100) / 100);
+      }
+      return next;
+    });
+    setDupeOnay(false);
+  };
+
+  const oMatrah = parseTurkishNumber(oForm.matrah) || 0;
+  const oToplam = parseTurkishNumber(oForm.toplamTutar) || 0;
+  const oOran = parseTurkishNumber(oForm.kdvOrani) || 0;
+  const durum = okumaModalDoc?.okumaDurum ?? "taslak";
+  const guven = okumaModalDoc?.okuma?.guven ?? null;
+  const oFaturaUygun =
+    oForm.belgeTuru === "fatura" &&
+    oMatrah > 0 &&
+    KDV_RATES.some((r) => Math.abs(r - oOran) < 0.01);
+
+  // Aynı tarih+tutarla mevcut kayıtlar (mükerrer onay koruması)
+  const benzerSayisi =
+    okumaModalDoc && oForm.yon && oForm.tarih && oToplam > 0
+      ? data.transactions.filter(
+          (t) =>
+            t.type === oForm.yon &&
+            t.date === oForm.tarih &&
+            Math.abs(t.amount - oToplam) < 0.01,
+        ).length +
+        data.invoices.filter(
+          (inv) =>
+            inv.date === oForm.tarih && Math.abs(inv.total - oToplam) < 0.01,
+        ).length
+      : 0;
+
+  const onayBasla = (): boolean => {
+    if (benzerSayisi > 0 && !dupeOnay) {
+      setDupeOnay(true);
+      toast.warning(
+        "Benzer kayıt bulundu — mükerrer olabilir. Eminseniz butona tekrar tıklayın.",
+      );
+      return false;
+    }
+    return true;
+  };
+
+  const kategoriBul = (
+    yon: "gelir" | "gider",
+    tur: BelgeTuru,
+  ): TransactionCategory => {
+    if (yon === "gelir") return tur === "fatura" ? "Satış" : "Tahsilat";
+    if (tur === "fatura") return "Fatura";
+    if (tur === "beyanname") return "Vergi";
+    return "Diğer";
+  };
+
+  const onaylaHareket = () => {
+    const doc = okumaModalDoc;
+    if (!doc) return;
+    if (!oForm.yon) {
+      toast.error("Belge yönünü seçin (gelir / gider).");
+      return;
+    }
+    if (!oForm.hesapId) {
+      toast.error("Kasa/banka hesabı seçin.");
+      return;
+    }
+    if (oToplam <= 0) {
+      toast.error("Toplam tutar sıfırdan büyük olmalı.");
+      return;
+    }
+    if (!onayBasla()) return;
+    const tarih = oForm.tarih || todayIso();
+    const aciklama = [
+      doc.name,
+      oForm.belgeNo ? `No: ${oForm.belgeNo}` : "",
+      oForm.cariUnvan ? `— ${oForm.cariUnvan}` : "",
+    ]
+      .filter(Boolean)
+      .join(" ");
+    addTransaction({
+      type: oForm.yon,
+      description: aciklama,
+      category: kategoriBul(oForm.yon, oForm.belgeTuru),
+      accountId: oForm.hesapId,
+      amount: oToplam,
+      date: tarih,
+      documentId: doc.id,
+    });
+    setDocumentOkumaDurum(doc.id, "onayli");
+    setOkumaDoc(null);
+    toast.success("Onaylandı — finansal kayıt oluşturuldu.");
+  };
+
+  const onaylaFatura = () => {
+    const doc = okumaModalDoc;
+    if (!doc) return;
+    const cari = oForm.cariUnvan.trim();
+    if (!cari) {
+      toast.error("Fatura kaydı için cari ünvan girin.");
+      return;
+    }
+    if (!oForm.yon) {
+      toast.error("Belge yönünü seçin (gelir / gider).");
+      return;
+    }
+    const kdvRate = KDV_RATES.find((r) => Math.abs(r - oOran) < 0.01);
+    if (!kdvRate) {
+      toast.error("Fatura kaydı için KDV oranı %1, %10 veya %20 olmalı.");
+      return;
+    }
+    if (!onayBasla()) return;
+    const tarih = oForm.tarih || todayIso();
+    const mevcut = data.contacts.find(
+      (c) =>
+        c.name.trim().toLocaleLowerCase("tr") === cari.toLocaleLowerCase("tr"),
+    );
+    const contact =
+      mevcut ??
+      addContact({
+        name: cari,
+        type: oForm.yon === "gider" ? "tedarikci" : "musteri",
+        taxNo: oForm.cariVkn || undefined,
+      });
+    addInvoice({
+      contactId: contact.id,
+      date: tarih,
+      items: [
+        {
+          id: `it-${Date.now().toString(36)}`,
+          description: doc.name,
+          quantity: 1,
+          unitPrice: oMatrah,
+          kdvRate,
+        },
+      ],
+    });
+    setDocumentOkumaDurum(doc.id, "onayli");
+    setOkumaDoc(null);
+    toast.success("Onaylandı — fatura kaydı oluşturuldu.");
+  };
+
+  const okumayiReddet = () => {
+    const doc = okumaModalDoc;
+    if (!doc) return;
+    setDocumentOkumaDurum(doc.id, "reddedildi");
+    setOkumaDoc(null);
+    toast.info("Okuma reddedildi. Belge arşivde kalır, kayıt oluşturulmadı.");
   };
 
   const startEdit = (doc: StoredDocument) => {
@@ -278,6 +594,19 @@ export default function Belgeler() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [previewDoc]);
+
+  // ESC ile akıllı okuma modalını kapat
+  useEffect(() => {
+    if (!okumaDoc) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setOkumaDoc(null);
+        setBekleyenId(null);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [okumaDoc]);
 
   return (
     <div className="min-h-screen bg-background pl-64 text-foreground">
@@ -391,7 +720,16 @@ export default function Belgeler() {
               />
             </div>
           </div>
-          <div className="mt-4 flex justify-end">
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+            <label className="flex cursor-pointer items-center gap-2 text-xs text-muted-foreground select-none">
+              <input
+                type="checkbox"
+                checked={okuSonra}
+                onChange={(e) => setOkuSonra(e.target.checked)}
+                className="size-3.5 accent-emerald-600"
+              />
+              Kaydedince akıllı oku — tarih, tutar, KDV ve cari otomatik çıkarılsın
+            </label>
             <Button
               type="button"
               onClick={handleUpload}
@@ -593,8 +931,45 @@ export default function Belgeler() {
                             {doc.note}
                           </p>
                         )}
+                        {doc.okumaDurum && (
+                          <button
+                            type="button"
+                            className={cn(
+                              "mt-1.5 inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-semibold",
+                              doc.okumaDurum === "taslak" &&
+                                "bg-amber-100 text-amber-700 hover:bg-amber-200 dark:bg-amber-950 dark:text-amber-300",
+                              doc.okumaDurum === "onayli" &&
+                                "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300",
+                              doc.okumaDurum === "reddedildi" &&
+                                "bg-muted text-muted-foreground hover:bg-muted/70",
+                            )}
+                            onClick={() => okumaAc(doc)}
+                          >
+                            <Sparkles className="size-3" />
+                            {doc.okumaDurum === "taslak"
+                              ? "Okuma — onay bekliyor"
+                              : doc.okumaDurum === "onayli"
+                                ? "Okuma — onaylı"
+                                : "Okuma — reddedildi"}
+                          </button>
+                        )}
                       </div>
                       <div className="flex shrink-0 items-center gap-0.5">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="size-8 text-muted-foreground hover:text-emerald-600"
+                          title={doc.okuma ? "Okuma taslağını aç" : "Akıllı oku"}
+                          disabled={okuyorId === doc.id}
+                          onClick={() => okumaAc(doc)}
+                        >
+                          {okuyorId === doc.id ? (
+                            <span className="size-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                          ) : (
+                            <Sparkles className="size-3.5" />
+                          )}
+                        </Button>
                         <Button
                           type="button"
                           variant="ghost"
@@ -748,6 +1123,362 @@ export default function Belgeler() {
                 </div>
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Akıllı belge okuma — anahtar girişi / taslak onayı */}
+      {okumaModalDoc && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          onClick={() => {
+            setOkumaDoc(null);
+            setBekleyenId(null);
+          }}
+        >
+          <div
+            className="relative max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl border border-border bg-card p-6 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-5 flex items-start justify-between gap-3">
+              <div className="flex items-start gap-3">
+                <span className="flex size-9 shrink-0 items-center justify-center rounded-md border border-border/60 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                  <Sparkles className="size-4" />
+                </span>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold tracking-tight">
+                    Akıllı Belge Okuma
+                  </p>
+                  <p className="truncate text-xs text-muted-foreground">
+                    {okumaModalDoc.name} · {okumaModalDoc.fileName}
+                  </p>
+                </div>
+              </div>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-8"
+                onClick={() => {
+                  setOkumaDoc(null);
+                  setBekleyenId(null);
+                }}
+              >
+                <X className="size-4" />
+              </Button>
+            </div>
+
+            {okumaMod === "key" ? (
+              /* ---------- API anahtarı girişi ---------- */
+              <div className="grid gap-4">
+                <div className="flex items-start gap-2.5 rounded-lg border border-border/70 bg-muted/40 px-4 py-3 text-xs leading-5 text-muted-foreground">
+                  <KeyRound className="mt-0.5 size-4 shrink-0" />
+                  <p>
+                    Tarih, tutar, vergi (KDV) ve cari bilgilerini otomatik çıkarmak için
+                    bir Google AI Studio API anahtarı gerekli. Anahtar yalnızca bu cihazın
+                    yerel deposunda saklanır; okuma sırasında yalnızca belgenin kendisi
+                    (görsel/PDF) modele iletilir.
+                  </p>
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="ai-key">Google AI Studio API Anahtarı</Label>
+                  <Input
+                    id="ai-key"
+                    type="password"
+                    autoComplete="off"
+                    placeholder="AIza…"
+                    value={anahtarInput}
+                    onChange={(e) => setAnahtarInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") anahtariKaydet();
+                    }}
+                  />
+                </div>
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <a
+                    href="https://aistudio.google.com/apikey"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs text-emerald-600 underline underline-offset-2 hover:text-emerald-700"
+                  >
+                    Ücretsiz anahtar oluştur → aistudio.google.com/apikey
+                  </a>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setOkumaDoc(null);
+                        setBekleyenId(null);
+                      }}
+                    >
+                      Daha sonra
+                    </Button>
+                    <Button size="sm" onClick={anahtariKaydet}>
+                      <KeyRound className="mr-1.5 size-3.5" />
+                      Anahtarı Kaydet ve Oku
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              /* ---------- Taslak inceleme & onay ---------- */
+              <div className="grid gap-4">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="rounded bg-muted px-2 py-0.5 text-[11px] font-semibold">
+                    {BELGE_TURU_ETIKET[oForm.belgeTuru]}
+                  </span>
+                  {guven !== null && (
+                    <span
+                      className={cn(
+                        "rounded px-2 py-0.5 text-[11px] font-semibold",
+                        guven >= 0.8
+                          ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300"
+                          : guven >= 0.5
+                            ? "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300"
+                            : "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300",
+                      )}
+                      title="Yapay zekânın çıkarımlara güveni"
+                    >
+                      %{Math.round(guven * 100)} güven
+                    </span>
+                  )}
+                  <span
+                    className={cn(
+                      "rounded px-2 py-0.5 text-[11px] font-semibold",
+                      durum === "taslak" &&
+                        "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300",
+                      durum === "onayli" &&
+                        "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300",
+                      durum === "reddedildi" && "bg-muted text-muted-foreground",
+                    )}
+                  >
+                    {durum === "taslak"
+                      ? "Onay bekliyor"
+                      : durum === "onayli"
+                        ? "Onaylandı"
+                        : "Reddedildi"}
+                  </span>
+                  {okumaModalDoc.okumaAt && (
+                    <span className="text-[11px] text-muted-foreground">
+                      {formatFullDate(new Date(okumaModalDoc.okumaAt))} okundu
+                    </span>
+                  )}
+                </div>
+
+                {okumaModalDoc.okuma?.not && (
+                  <p className="rounded-lg border border-border/70 bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+                    Model notu: {okumaModalDoc.okuma.not}
+                  </p>
+                )}
+
+                {durum === "onayli" && (
+                  <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/50 dark:text-emerald-300">
+                    Bu belge onaylandı ve finansal kayıt oluşturuldu. Düzeltme gerekirse
+                    ilgili kaydı Gelir-Gider veya Fatura sayfalarından düzenleyin.
+                  </div>
+                )}
+                {durum === "reddedildi" && (
+                  <div className="rounded-lg border border-border/70 bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+                    Bu okuma reddedildi; kayıt oluşturulmadı. Bilgileri düzeltip yeniden
+                    onaylayabilirsiniz.
+                  </div>
+                )}
+
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="space-y-1.5">
+                    <Label>Belge Türü</Label>
+                    <select
+                      value={oForm.belgeTuru}
+                      onChange={(e) =>
+                        oAlanSet({ belgeTuru: e.target.value as BelgeTuru })
+                      }
+                      className={selectSinif}
+                    >
+                      {BELGE_TURLERI.map((t) => (
+                        <option key={t} value={t}>
+                          {BELGE_TURU_ETIKET[t]}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Yön *</Label>
+                    <select
+                      value={oForm.yon}
+                      onChange={(e) =>
+                        oAlanSet({ yon: e.target.value as OkumaForm["yon"] })
+                      }
+                      className={selectSinif}
+                    >
+                      <option value="">Seçiniz…</option>
+                      <option value="gelir">Gelir (tahsilat / satış)</option>
+                      <option value="gider">Gider (ödeme / alış)</option>
+                    </select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Tarih</Label>
+                    <Input
+                      type="date"
+                      value={oForm.tarih}
+                      onChange={(e) => oAlanSet({ tarih: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Belge No</Label>
+                    <Input
+                      value={oForm.belgeNo}
+                      placeholder="Örn. GIB2026000001"
+                      onChange={(e) => oAlanSet({ belgeNo: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-1.5 sm:col-span-2">
+                    <Label>Cari Ünvan</Label>
+                    <Input
+                      list="cari-okuma-listesi"
+                      value={oForm.cariUnvan}
+                      placeholder="Mevcut cariden seçin veya yeni ünvan yazın"
+                      onChange={(e) => oAlanSet({ cariUnvan: e.target.value })}
+                    />
+                    <datalist id="cari-okuma-listesi">
+                      {data.contacts.map((c) => (
+                        <option key={c.id} value={c.name} />
+                      ))}
+                    </datalist>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Matrah (KDV hariç)</Label>
+                    <Input
+                      inputMode="decimal"
+                      className="text-right tabular-nums"
+                      value={oForm.matrah}
+                      placeholder="0,00"
+                      onChange={(e) =>
+                        oAlanSet({ matrah: formatInputValue(e.target.value) })
+                      }
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>KDV Oranı</Label>
+                    <select
+                      value={oForm.kdvOrani}
+                      onChange={(e) => oAlanSet({ kdvOrani: e.target.value })}
+                      className={selectSinif}
+                    >
+                      <option value="0">%0</option>
+                      <option value="1">%1</option>
+                      <option value="10">%10</option>
+                      <option value="20">%20</option>
+                    </select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>KDV Tutarı</Label>
+                    <Input
+                      inputMode="decimal"
+                      className="text-right tabular-nums"
+                      value={oForm.kdvTutar}
+                      placeholder="0,00"
+                      onChange={(e) =>
+                        oAlanSet({ kdvTutar: formatInputValue(e.target.value) })
+                      }
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Toplam Tutar</Label>
+                    <Input
+                      inputMode="decimal"
+                      className="text-right font-semibold tabular-nums"
+                      value={oForm.toplamTutar}
+                      placeholder="0,00"
+                      onChange={(e) =>
+                        oAlanSet({ toplamTutar: formatInputValue(e.target.value) })
+                      }
+                    />
+                  </div>
+                  <div className="space-y-1.5 sm:col-span-2">
+                    <Label>Hesap (kasa/banka) — hareket kaydı için</Label>
+                    <select
+                      value={oForm.hesapId}
+                      onChange={(e) => oAlanSet({ hesapId: e.target.value })}
+                      className={selectSinif}
+                    >
+                      <option value="">Hesap seçin…</option>
+                      {data.accounts.map((a) => (
+                        <option key={a.id} value={a.id}>
+                          {a.name} ({a.type === "kasa" ? "Kasa" : "Banka"})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                {!oForm.yon && (
+                  <p className="text-xs text-amber-700 dark:text-amber-400">
+                    Yön seçilmedi — onaylamadan önce belgenin gelir mi gider mi olduğunu
+                    doğrulayın.
+                  </p>
+                )}
+
+                {benzerSayisi > 0 && (
+                  <div className="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-900 dark:bg-amber-950/50 dark:text-amber-200">
+                    <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
+                    <p>
+                      Aynı tarih ve tutarda {benzerSayisi} mevcut kayıt bulundu (
+                      {formatTRY(oToplam)}). Onaylarsanız mükerrer oluşabilir —{' '}
+                      {dupeOnay
+                        ? "eminseniz butona tekrar tıklayarak onaylayın."
+                        : "önce mevcut kayıtları kontrol edin."}
+                    </p>
+                  </div>
+                )}
+
+                <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border/70 pt-4">
+                  <div className="flex gap-2">
+                    {durum !== "onayli" && (
+                      <Button variant="ghost" size="sm" onClick={okumayiReddet}>
+                        Reddet
+                      </Button>
+                    )}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={okuyorId === okumaModalDoc.id}
+                      onClick={() => void belgeyiOku(okumaModalDoc)}
+                    >
+                      {okuyorId === okumaModalDoc.id ? (
+                        <>
+                          <span className="mr-1.5 size-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                          Okunuyor…
+                        </>
+                      ) : (
+                        "Yeniden Okut"
+                      )}
+                    </Button>
+                  </div>
+                  {durum !== "onayli" && (
+                    <div className="flex gap-2">
+                      {oFaturaUygun && (
+                        <Button variant="outline" size="sm" onClick={onaylaFatura}>
+                          Fatura Kaydı Oluştur
+                        </Button>
+                      )}
+                      <Button
+                        size="sm"
+                        disabled={!oForm.yon || oToplam <= 0}
+                        onClick={onaylaHareket}
+                      >
+                        Onayla ve Kaydet
+                      </Button>
+                    </div>
+                  )}
+                </div>
+
+                <p className="text-[11px] leading-4 text-muted-foreground/80">
+                  Onay verilmeden bu belgeden hiçbir finansal kayıt oluşmaz; okuma yalnızca
+                  belge üzerinde bir taslak olarak durur. Fatura kaydı seçeneği yalnızca fatura
+                  belgelerinde ve %1/%10/%20 KDV oranlarında görünür.
+                </p>
+              </div>
+            )}
           </div>
         </div>
       )}
