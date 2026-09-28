@@ -29,6 +29,7 @@ import {
 import { addTransaction, useFinanceData } from "@/lib/finance/store";
 import { buildCashflowProjection } from "@/lib/finance/cashflow";
 import { useTcmbRates, POPULAR_CODES, CURRENCY_SYMBOLS, rateChange } from "@/lib/finance/tcmbRates";
+import { takvimSiradaki, AY_ADLARI } from "@/components/calculators/engine/vergiTakvimi";
 import { cn } from "@/lib/utils";
 import type { TransactionCategory } from "@/lib/finance/types";
 import { companyLabel } from "@/lib/finance/types";
@@ -39,6 +40,7 @@ import {
   ArrowDown,
   ArrowUp,
   ArrowUpRight,
+  CalendarClock,
   ChevronRight,
   Globe,
   Minus,
@@ -257,6 +259,174 @@ function CashflowSection() {
         Projeksiyon; mevcut kasa bakiyesi, planlı ödemelerin kalan tutarları,
         son 90 günün ortalama günlük geliri ve bugünün işlemlerine dayanır.
       </p>
+    </section>
+  );
+}
+
+const KATEGORI_RENK = {
+  KDV: "bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300",
+  Vergi: "bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-300",
+  SGK: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300",
+  "E-Belge": "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300",
+} as const;
+
+/** Ana sayfa vergi takvimi — sıradaki son tarih + yaklaşan yükümlülükler + yıllık şerit. */
+function VergiTakvimiSection() {
+  const bugun = useMemo(() => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }, []);
+  const siradaki = useMemo(() => takvimSiradaki({ periyot: "tumu" }, bugun), [bugun]);
+  const liste = siradaki.slice(0, 5);
+  const sonraki = liste[0];
+
+  const fmtTarih = (d: Date) => `${String(d.getDate()).padStart(2, "0")} ${AY_ADLARI[d.getMonth()]}`;
+
+  return (
+    <section className="mt-6 overflow-hidden rounded-xl border border-border/70 bg-card card-shadow transition-shadow duration-200 hover:card-shadow-lg">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/70 px-5 py-4 sm:px-6">
+        <div className="flex items-center gap-2">
+          <CalendarClock className="size-4 text-muted-foreground" />
+          <div>
+            <h2 className="text-sm font-semibold text-foreground">Vergi Takvimi</h2>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              2026 beyanname ve bildirim son tarihleri
+            </p>
+          </div>
+        </div>
+        <Link
+          to="/hesaplayicilar?tab=takvim"
+          className="flex items-center gap-0.5 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+        >
+          Tam Takvim
+          <ChevronRight className="size-3.5" />
+        </Link>
+        </div>
+
+      {siradaki.length === 0 ? (
+        <div className="px-5 py-10 text-center sm:px-6">
+          <p className="text-sm font-medium text-foreground">Sırada bekleyen yükümlülük yok 🎉</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            2026 takvimindeki tüm son tarihler geçti.
+          </p>
+        </div>
+      ) : (
+        <div className="grid gap-0 lg:grid-cols-[minmax(0,1fr)_minmax(0,320px)]">
+          {/* Yaklaşan yükümlülükler */}
+          <ul className="divide-y divide-border/70 lg:border-r lg:border-border/70">
+            {liste.map((x) => (
+              <li
+                key={`${x.kayit.ad}-${x.kalanGun}`}
+                className={cn(
+                  "flex items-center gap-4 px-5 py-3.5 transition-colors hover:bg-muted/40 sm:px-6",
+                  x.kalanGun === 0 && "bg-amber-50/60 dark:bg-amber-950/20",
+                )}
+              >
+                <div
+                  className={cn(
+                    "flex size-11 shrink-0 flex-col items-center justify-center rounded-lg border",
+                    x.kalanGun <= 3
+                      ? "border-amber-300 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/40"
+                      : "border-border/70 bg-background",
+                  )}
+                >
+                  <span className="font-mono text-base font-bold leading-none tabular-nums text-foreground">
+                    {String(x.tarih.getDate()).padStart(2, "0")}
+                  </span>
+                  <span className="mt-0.5 text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    {AY_ADLARI[x.tarih.getMonth()].slice(0, 3)}
+                  </span>
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-[13px] font-medium leading-snug text-foreground">
+                    {x.kayit.ad}
+                  </p>
+                  <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
+                    {fmtTarih(x.tarih)}{x.kayit.periyot !== "Aylık" ? ` · ${x.kayit.periyot}` : ""}
+                  </p>
+                </div>
+                <span className={cn("hidden shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold sm:inline-block", KATEGORI_RENK[x.kayit.kategori])}>
+                  {x.kayit.kategori}
+                </span>
+                <span
+                  className={cn(
+                    "w-14 shrink-0 text-right text-xs font-semibold tabular-nums",
+                    x.kalanGun === 0
+                      ? "text-amber-700 dark:text-amber-400"
+                      : x.kalanGun <= 5
+                        ? "text-red-600 dark:text-red-400"
+                        : "text-muted-foreground",
+                  )}
+                >
+                  {x.kalanGun === 0 ? "Bugün" : x.kalanGun === 1 ? "Yarın" : `${x.kalanGun} gün`}
+                </span>
+              </li>
+            ))}
+          </ul>
+
+          {/* Sıradaki son tarih — büyük sayaç kartı */}
+          <div className="flex flex-col items-center justify-center gap-3 border-t border-border/70 bg-muted/30 px-6 py-6 lg:border-t-0">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+              Sıradaki Son Tarih
+            </p>
+            {sonraki && (
+              <>
+                <div className="flex items-baseline gap-1.5">
+                  <span className="font-mono text-5xl font-bold tabular-nums tracking-tight text-foreground">
+                    {sonraki.kalanGun}
+                  </span>
+                  <span className="text-sm font-medium text-muted-foreground">gün</span>
+                </div>
+                <p className="max-w-[240px] text-center text-[13px] font-medium leading-snug text-foreground">
+                  {sonraki.kayit.ad}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {String(sonraki.tarih.getDate()).padStart(2, "0")} {AY_ADLARI[sonraki.tarih.getMonth()]} {sonraki.tarih.getFullYear()}
+                </p>
+                <span className={cn("rounded px-2 py-0.5 text-[10px] font-semibold", KATEGORI_RENK[sonraki.kayit.kategori])}>
+                  {sonraki.kayit.kategori}
+                </span>
+              </>
+            )}
+            <p className="mt-1 text-[10px] leading-4 text-muted-foreground/70">
+              Son gün tatile denk gelirse süre ilk iş gününe uzar.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Yıllık şerit — her ayın yükümlülük sayısı */}
+      <div className="border-t border-border/70 px-5 py-3.5 sm:px-6">
+        <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/70">
+          2026 Yıllık Görünüm
+        </p>
+        <div className="grid grid-cols-6 gap-1.5 sm:grid-cols-12">
+          {AY_ADLARI.map((m, idx) => {
+            const ay = idx + 1;
+            const sayi = siradaki.filter((x) => x.tarih.getMonth() + 1 === ay).length;
+            const gecmis = ay < bugun.getMonth() + 1;
+            return (
+              <div
+                key={m}
+                title={`${m}: ${sayi} yükümlülük`}
+                className={cn(
+                  "rounded-md border px-1 py-1.5 text-center transition-colors",
+                  sayi === 0
+                    ? "border-border/50 bg-muted/20"
+                    : "border-border/70 bg-background hover:bg-muted/40",
+                  gecmis && "opacity-40",
+                )}
+              >
+                <p className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">{m.slice(0, 3)}</p>
+                <p className={cn("font-mono text-sm font-bold tabular-nums", sayi > 0 ? "text-foreground" : "text-muted-foreground/40")}>
+                  {sayi}
+                </p>
+              </div>
+            );
+          })}
+        </div>
+      </div>
     </section>
   );
 }
@@ -688,7 +858,10 @@ export default function Dashboard() {
         </section>
 
         {/* Nakit akış projeksiyonu */}
-        <CashflowSection /> 
+        <CashflowSection />
+
+        {/* Vergi takvimi — sıradaki son tarihler */}
+        <VergiTakvimiSection />
 
         {/* Yaklaşan ödemeler + son işlemler */}
         <div className="mt-6 grid gap-6 lg:grid-cols-2">

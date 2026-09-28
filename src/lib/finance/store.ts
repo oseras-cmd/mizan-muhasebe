@@ -1,4 +1,11 @@
 import { useSyncExternalStore } from "react";
+import {
+  collectDocData as collectDocDataAsync,
+  getDocumentDataUrlSync,
+  initDocumentStorage,
+  putDocumentData,
+  removeDocumentData,
+} from "./documentStorage";
 import { formatTRY, todayIso } from "./format";
 import type {
   Account,
@@ -90,30 +97,8 @@ function loadFinanceData(): FinanceData {
           ...account,
           currency: account.currency ?? "TRY",
         }));
-        // Migration: eski belgelerin dataUrl'lerini ayrı anahtarlara taşı
-        try {
-          let migrated = false;
-          for (const doc of result.documents) {
-            if (
-              doc.dataUrl &&
-              doc.dataUrl.length > 100 &&
-              getDocumentDataUrl(doc.id) === null
-            ) {
-              try {
-                window.localStorage.setItem(DOC_KEY_PREFIX + doc.id, doc.dataUrl);
-                doc.dataUrl = "";
-                migrated = true;
-              } catch {
-                // Bu belge taşınamadı (kota dolu) — sonraki açılışta tekrar denenir
-              }
-            }
-          }
-          if (migrated) {
-            window.localStorage.setItem(STORAGE_KEY, JSON.stringify(result));
-          }
-        } catch {
-          // Migration hatası kritik değil
-        }
+        // NOT: Eski belge dataUrl migrasyonu artık documentStorage init'inde
+        // yapılıyor (localStorage → IndexedDB). Burada yalnızca metadata'yı temiz tutuyoruz.
         return result;
       }
     }
@@ -155,22 +140,31 @@ export function setFinanceData(next: FinanceData) {
 
 /* ---------------------------------- Yedekleme ---------------------------------- */
 
-/** Tüm veriyi indirilebilir JSON metni olarak döndürür. */
-export function exportFinanceData(): string {
+/** Tüm veriyi indirilebilir JSON metni olarak döndürür.
+ *  Belge dosya içerikleri IndexedDB'den okunduğu için async'tir.
+ *  Db açılamazsa belge içerikleri yedeklenmeden sadece metadata dönürülür. */
+export async function exportFinanceData(): Promise<string> {
+  let docData: Record<string, string> = {};
+  try {
+    docData = await collectDocData();
+  } catch {
+    // Belge verileri okunamadıysa metadata ile devam et
+  }
   return JSON.stringify(
     {
       app: "mizan",
       version: 1,
       exportedAt: new Date().toISOString(),
       data,
-      docData: collectDocData(),
+      docData,
     },
     null,
     2,
   );
 }
 
-/** JSON yedekten veriyi yükler; geçerli değilse false döner ve veri değişmez. */
+/** JSON yedekten veriyi yükler; geçerli değilse false döner ve veri değişmez.
+ *  Belge verileri IndexedDB'ye yazılır; IndexedDB açılamazsa veri yine de yüklenir. */
 export function importFinanceData(raw: string): boolean {
   try {
     const parsed: unknown = JSON.parse(raw);
@@ -191,11 +185,11 @@ export function importFinanceData(raw: string): boolean {
         imported as Record<string, string>,
       )) {
         if (typeof value === "string" && value) {
-          try {
-            window.localStorage.setItem(DOC_KEY_PREFIX + id, value);
-          } catch {
-            // Depolama dolu — bu belge atlandı
-          }
+          // IndexedDB'ye yaz (putDocumentData aynı zamanda bellek önbelleğini
+          // günceller, böylece senkron okumalar hemen çalışır)
+          void putDocumentData(id, value).catch(() => {
+            // IndexedDB yazılamadı — belge verisi eksik kalır, metadata yine yüklenir
+          });
         }
       }
     }
@@ -216,11 +210,41 @@ export function useFinanceData(): FinanceData {
   return useSyncExternalStore(subscribe, getFinanceData);
 }
 
-// Uygulama başladığında otomatik yedeklemeyi başlat
+// Uygulama başladığında belge depolama katmanını (IndexedDB + migrasyon) ve
+// otomatik yedeklemeyi başlat
 if (typeof window !== "undefined") {
+  initDocumentStorage();
+  migrateEmbeddedDocData();
   import("./backupManager").then(({ startAutoBackup }) => {
     startAutoBackup();
   });
+}
+
+/** En eski biçim: veri metadata içinde gömülü — IndexedDB'ye taşınıp metadata temizlenir. */
+function migrateEmbeddedDocData() {
+  const embedded = data.documents.filter(
+    (d) => d.dataUrl && d.dataUrl.length > 100,
+  );
+  if (embedded.length === 0) return;
+  void (async () => {
+    const cleared: string[] = [];
+    for (const doc of embedded) {
+      try {
+        await putDocumentData(doc.id, doc.dataUrl!);
+        cleared.push(doc.id);
+      } catch {
+        // Taşınamadı — sonraki açılışta tekrar denenir
+      }
+    }
+    if (cleared.length > 0) {
+      setFinanceData({
+        ...data,
+        documents: data.documents.map((d) =>
+          cleared.includes(d.id) ? { ...d, dataUrl: "" } : d,
+        ),
+      });
+    }
+  })();
 }
 
 function newId(prefix: string): string {
@@ -1101,81 +1125,37 @@ export function deleteBudgetTarget(id: string) {
 
 /* ---------------------------------- Belgeler ---------------------------------- */
 
-/** localStorage kapasitesi nedeniyle dosya başına üst sınır (bayt) */
-export const MAX_DOCUMENT_SIZE = 2 * 1024 * 1024; // 2 MB
+/** Dosya başına üst sınır (bayt). IndexedDB sayesinde artık rahat bir limit. */
+export const MAX_DOCUMENT_SIZE = 20 * 1024 * 1024; // 20 MB
 
-/** Belge base64 verileri ana state'i şişirmemesi için ayrı tutulur.
- *  Her belge kendi localStorage anahtarında saklanır: kaydetme sırasında yalnızca
- *  o belge yazılır, tüm haritanın yeniden yazılması/arayüzün donması olmaz. */
-const DOC_KEY_PREFIX = "mizan-doc-";
-/** Eski sürüm: tüm belgeler tek JSON anahtarındaydı (geriye dönük okuma için). */
-const DOC_DATA_KEY = "mizan-doc-data-v1";
-
-function loadLegacyDocDataMap(): Record<string, string> {
-  try {
-    const raw = window.localStorage.getItem(DOC_DATA_KEY);
-    return raw ? (JSON.parse(raw) as Record<string, string>) : {};
-  } catch {
-    return {};
-  }
-}
-
-/** Belge base64 verisini yükle (lazy) */
+/**
+ * Belge base64 verileri ana state'i şişirmemesi için ayrı tutulur ve
+ * IndexedDB'de saklanır (documentStorage.ts). Eski localStorage anahtarları
+ * açılışta otomatik olarak IndexedDB'ye taşınır; senkron okuma için bellek
+ * önbelleği kullanılır.
+ */
+/** Belge base64 verisini yükle (önbellekten senkron). */
 export function getDocumentDataUrl(id: string): string | null {
-  try {
-    const direct = window.localStorage.getItem(DOC_KEY_PREFIX + id);
-    if (direct) return direct;
-  } catch {
-    // ignore
-  }
-  return loadLegacyDocDataMap()[id] ?? null;
+  const direct = getDocumentDataUrlSync(id);
+  if (direct) return direct;
+  // En eski biçim: veri metadata içinde gömülü olabilir
+  const doc = data.documents.find((d) => d.id === id);
+  return doc?.dataUrl || null;
 }
 
-/** Belge base64 verisini kaydet. Depolama doluysa hata fırlatır. */
-function setDocumentDataUrl(id: string, dataUrl: string) {
-  try {
-    window.localStorage.setItem(DOC_KEY_PREFIX + id, dataUrl);
-  } catch {
-    throw new Error("DOC_STORAGE_FULL");
-  }
+/** Belge base64 verisini IndexedDB'ye kaydet. */
+export async function setDocumentDataUrl(id: string, dataUrl: string) {
+  await putDocumentData(id, dataUrl);
 }
 
 /** Belge base64 verisini sil */
-function removeDocumentDataUrl(id: string) {
-  try {
-    window.localStorage.removeItem(DOC_KEY_PREFIX + id);
-  } catch {
-    // ignore
-  }
-  try {
-    const legacy = loadLegacyDocDataMap();
-    if (id in legacy) {
-      delete legacy[id];
-      window.localStorage.setItem(DOC_DATA_KEY, JSON.stringify(legacy));
-    }
-  } catch {
-    // ignore
-  }
+export async function removeDocumentDataUrl(id: string) {
+  await removeDocumentData(id);
 }
 
 /** Dışa aktarma için tüm belge verilerini toplar. */
-export function collectDocData(): Record<string, string> {
-  const out: Record<string, string> = {};
-  try {
-    for (let i = 0; i < window.localStorage.length; i++) {
-      const key = window.localStorage.key(i);
-      if (key && key.startsWith(DOC_KEY_PREFIX)) {
-        const value = window.localStorage.getItem(key);
-        if (value) out[key.slice(DOC_KEY_PREFIX.length)] = value;
-      }
-    }
-  } catch {
-    // ignore
-  }
-  for (const [id, value] of Object.entries(loadLegacyDocDataMap())) {
-    if (!(id in out)) out[id] = value;
-  }
-  return out;
+export function collectDocData(): Promise<Record<string, string>> {
+  return collectDocDataAsync();
 }
 
 export interface NewDocumentInput {
@@ -1189,8 +1169,8 @@ export interface NewDocumentInput {
   dataUrl: string;
 }
 
-/** Belgeyi kaydeder; depolama doluysa hata fırlatır. */
-export function addDocument(input: NewDocumentInput): StoredDocument {
+/** Belgeyi kaydeder; depolama yazımı başarısızsa hata fırlatır. */
+export async function addDocument(input: NewDocumentInput): Promise<StoredDocument> {
   const doc: StoredDocument = {
     id: newId("doc"),
     name: input.name.trim() || input.fileName,
@@ -1203,8 +1183,8 @@ export function addDocument(input: NewDocumentInput): StoredDocument {
     dataUrl: input.dataUrl,
     uploadedAt: new Date().toISOString(),
   };
-  // base64 verisini ayrı anahtara yaz (başarısızsa belge hiç eklenmez)
-  setDocumentDataUrl(doc.id, input.dataUrl);
+  // base64 verisini IndexedDB'ye yaz (başarısızsa belge hiç eklenmez)
+  await setDocumentDataUrl(doc.id, input.dataUrl);
   const docMeta = { ...doc, dataUrl: "" };
   setFinanceData({ ...data, documents: [docMeta, ...data.documents] });
   return doc;
@@ -1232,7 +1212,7 @@ export function updateDocument(
 
 export function deleteDocument(id: string) {
   setFinanceData({ ...data, documents: data.documents.filter((doc) => doc.id !== id) });
-  removeDocumentDataUrl(id);
+  void removeDocumentDataUrl(id);
 }
 
 /* ---------------------------------- Akıllı Belge Okuma ---------------------------------- */

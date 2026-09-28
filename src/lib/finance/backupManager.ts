@@ -74,7 +74,7 @@ interface BackupRecord {
 
 /** Tek bir yedek kaydı oluştur */
 export async function createBackup(): Promise<{ size: number; date: string }> {
-  const json = exportFinanceData();
+  const json = await exportFinanceData();
   const size = new Blob([json]).size;
   const now = new Date().toISOString();
 
@@ -183,6 +183,27 @@ export async function listBackups(): Promise<{ id: string; date: string; size: n
       .map((r) => ({ id: r.id, date: r.createdAt, size: r.size }));
   } catch {
     return [];
+  }
+}
+
+/** Tüm otomatik yedekleri siler (depoları boşaltmak için). */
+export async function deleteAllBackups(): Promise<number> {
+  try {
+    const db = await openDB();
+    const tx = db.transaction(BACKUP_STORE_NAME, "readwrite");
+    const store = tx.objectStore(BACKUP_STORE_NAME);
+    const countReq = store.count();
+    const count = await new Promise<number>((resolve) => {
+      countReq.onsuccess = () => resolve(countReq.result);
+      countReq.onerror = () => resolve(0);
+    });
+    store.clear();
+    db.close();
+    const meta = getBackupMeta();
+    setBackupMeta({ ...meta, lastBackupAt: meta.lastBackupAt, backupCount: 0 });
+    return count;
+  } catch {
+    return 0;
   }
 }
 

@@ -10,6 +10,7 @@ import {
 } from "@/lib/finance/store";
 import {
   createBackup,
+  deleteAllBackups,
   downloadLastBackup,
   formatBackupDate,
   formatBytes,
@@ -18,6 +19,12 @@ import {
   listBackups,
   setAutoBackupEnabled,
 } from "@/lib/finance/backupManager";
+import {
+  getDocStorageInfo,
+  purgeOrphanDocData,
+  retryMigration,
+  type DocStorageInfo,
+} from "@/lib/finance/documentStorage";
 import { todayIso } from "@/lib/finance/format";
 import {
   checkForUpdates,
@@ -60,6 +67,11 @@ export default function Ayarlar() {
     { id: string; date: string; size: number }[]
   >([]);
   const [creatingBackup, setCreatingBackup] = useState(false);
+  // Depolama durumu
+  const [docInfo, setDocInfo] = useState<DocStorageInfo | null>(null);
+  const [purging, setPurging] = useState(false);
+  const [migrating, setMigrating] = useState(false);
+  const [confirmingBackupDelete, setConfirmingBackupDelete] = useState(false);
   const [isDarkTheme, setIsDarkTheme] = useState(() => {
     try { return document.documentElement.classList.contains("dark"); } catch { return false; }
   });
@@ -79,14 +91,16 @@ export default function Ayarlar() {
       setBackupMetaState(getBackupMeta());
       setDataSize(getCurrentDataSize());
       setBackupHistory(await listBackups());
+      setDocInfo(await getDocStorageInfo());
     };
     refresh();
     const timer = setInterval(refresh, 10_000);
     return () => clearInterval(timer);
   }, [data]);
 
-  const handleExport = () => {
-    const blob = new Blob([exportFinanceData()], {
+  const handleExport = async () => {
+    const json = await exportFinanceData();
+    const blob = new Blob([json], {
       type: "application/json",
     });
     const url = URL.createObjectURL(blob);
@@ -183,6 +197,53 @@ export default function Ayarlar() {
     }
   };
 
+  const handleDeleteAllBackups = async () => {
+    try {
+      const deleted = await deleteAllBackups();
+      setBackupHistory(await listBackups());
+      setBackupMetaState(getBackupMeta());
+      setConfirmingBackupDelete(false);
+      if (deleted > 0) {
+        toast.success(`${deleted} otomatik yedek silindi.`);
+      } else {
+        toast.info("Silinecek yedek bulunamadı.");
+      }
+      setDocInfo(await getDocStorageInfo());
+    } finally {
+      setConfirmingBackupDelete(false);
+    }
+  };
+
+  const handlePurgeOrphans = async () => {
+    setPurging(true);
+    try {
+      const removed = await purgeOrphanDocData(data.documents.map((d) => d.id));
+      if (removed > 0) {
+        toast.success(`${removed} yetim belge verisi temizlendi.`);
+      } else {
+        toast.info("Temizlenecek yetim veri bulunamadı.");
+      }
+      setDocInfo(await getDocStorageInfo());
+    } finally {
+      setPurging(false);
+    }
+  };
+
+  const handleRetryMigration = async () => {
+    setMigrating(true);
+    try {
+      const moved = await retryMigration();
+      if (moved > 0) {
+        toast.success(`${moved} belge IndexedDB'ye taşındı — localStorage alanı boşaldı.`);
+      } else {
+        toast.info("Taşınacak belge kalmadı.");
+      }
+      setDocInfo(await getDocStorageInfo());
+    } finally {
+      setMigrating(false);
+    }
+  };
+
   const handleToggleAutoBackup = () => {
     const next = !backupMeta.autoBackupEnabled;
     setAutoBackupEnabled(next);
@@ -232,7 +293,7 @@ export default function Ayarlar() {
                 Veri Durumu
               </h2>
               <p className="mt-0.5 text-xs text-muted-foreground">
-                Tüm veriler bu tarayıcıda (localStorage) saklanır
+                Kayıtlar bu tarayıcıda; belge dosyaları IndexedDB'de saklanır
               </p>
             </div>
           </header>
@@ -265,6 +326,145 @@ export default function Ayarlar() {
             <span className="font-mono text-xs font-medium tabular-nums text-foreground">
               {formatBytes(dataSize)}
             </span>
+          </div>
+        </section>
+
+        {/* Depolama */}
+        <section className="mt-6 rounded-lg border bg-card">
+          <header className="flex items-center gap-3 border-b border-border/70 px-5 py-4">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-border bg-background">
+              <HardDrive className="size-4 text-muted-foreground" />
+            </div>
+            <div className="flex-1">
+              <h2 className="text-sm font-semibold text-foreground">Depolama</h2>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                Belge dosyaları IndexedDB'de saklanır; kayıtlar localStorage'da tutulur
+              </p>
+            </div>
+          </header>
+
+          <div className="grid grid-cols-2 gap-px bg-border sm:grid-cols-4">
+            <div className="bg-card p-4 text-center">
+              <p className="font-mono text-lg font-medium tabular-nums text-foreground">
+                {docInfo?.docCount ?? "—"}
+              </p>
+              <p className="mt-0.5 text-xs text-muted-foreground">Belge verisi</p>
+            </div>
+            <div className="bg-card p-4 text-center">
+              <p className="font-mono text-lg font-medium tabular-nums text-foreground">
+                {docInfo ? formatBytes(docInfo.docBytes) : "—"}
+              </p>
+              <p className="mt-0.5 text-xs text-muted-foreground">Belge alanı</p>
+            </div>
+            <div className="bg-card p-4 text-center">
+              <p className="font-mono text-lg font-medium tabular-nums text-foreground">
+                {docInfo ? formatBytes(docInfo.localDocBytes) : "—"}
+              </p>
+              <p className="mt-0.5 text-xs text-muted-foreground">localStorage'da kalan</p>
+            </div>
+            <div className="bg-card p-4 text-center">
+              <p className="font-mono text-lg font-medium tabular-nums text-foreground">
+                {docInfo?.usageBytes != null
+                  ? `${formatBytes(docInfo.usageBytes)}${docInfo.quotaBytes ? ` / ${formatBytes(docInfo.quotaBytes)}` : ""}`
+                  : "—"}
+              </p>
+              <p className="mt-0.5 text-xs text-muted-foreground">Tarayıcı kullanımı</p>
+            </div>
+          </div>
+
+          <div className="space-y-4 border-t border-border/70 p-5 sm:p-6">
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div>
+                <p className="text-sm font-medium text-foreground">
+                  Eski belgeleri IndexedDB'ye taşı
+                </p>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  localStorage'daki belge verilerini geniş IndexedDB alanına taşır
+                  ve kota alanı boşaltır
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => void handleRetryMigration()}
+                disabled={migrating || (docInfo?.pendingMigration ?? 0) === 0}
+              >
+                <Upload className="mr-2 size-3.5" />
+                {migrating
+                  ? "Taşınıyor..."
+                  : docInfo?.pendingMigration
+                    ? `Taşı (${docInfo.pendingMigration} belge)`
+                    : "Taşınacak belge yok"}
+              </Button>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-4 border-t border-border/70 pt-4">
+              <div>
+                <p className="text-sm font-medium text-foreground">
+                  Yetim belge verilerini temizle
+                </p>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  Listede görünmeyen (sahipsiz) belge verilerini siler — kayıtlarınız
+                  ve belgeleriniz korunur
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => void handlePurgeOrphans()}
+                disabled={purging}
+              >
+                <Trash2 className="mr-2 size-3.5" />
+                {purging ? "Temizleniyor..." : "Temizle"}
+              </Button>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-4 border-t border-border/70 pt-4">
+              <div>
+                <p className="text-sm font-medium text-foreground">
+                  Otomatik yedekleri sil
+                </p>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  IndexedDB'deki tüm otomatik yedekleri siler — önce son yedeği
+                  indirmeniz önerilir
+                </p>
+              </div>
+              {confirmingBackupDelete ? (
+                <div className="flex items-center gap-1.5">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="text-destructive hover:text-destructive"
+                    onClick={() => void handleDeleteAllBackups()}
+                  >
+                    Evet, sil
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setConfirmingBackupDelete(false)}
+                  >
+                    <X className="size-3.5" />
+                  </Button>
+                </div>
+              ) : (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="text-destructive hover:text-destructive"
+                  onClick={() => setConfirmingBackupDelete(true)}
+                  disabled={backupHistory.length === 0}
+                >
+                  <Trash2 className="mr-2 size-3.5" />
+                  Sil ({backupHistory.length})
+                </Button>
+              )}
+            </div>
           </div>
         </section>
 

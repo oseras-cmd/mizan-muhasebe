@@ -61,6 +61,7 @@ import {
   Wallet,
 } from "lucide-react";
 import { useState } from "react";
+import { useSearchParams } from "react-router";
 
 const TABS = [
   { id: "kur", label: "Kur Çevir", icon: ArrowLeftRight },
@@ -112,7 +113,11 @@ const RATE_ITEMS: { code: RateCurrency; label: string }[] = [
 ];
 
 export default function Hesaplayicilar() {
-  const [active, setActive] = useState<TabId>("kur");
+  // ?tab=takvim gibi deep link desteği (örn. ana sayfadaki Vergi Takvimi kartından)
+  const [searchParams] = useSearchParams();
+  const tabParam = searchParams.get("tab");
+  const initialTab = TABS.some((t) => t.id === tabParam) ? (tabParam as TabId) : "kur";
+  const [active, setActive] = useState<TabId>(initialTab);
   const { data: tcmbData, loading, error: ratesError, refresh: refreshRates } = useTcmbRates();
   // Map TcmbRate[] → RateSnapshot for KurCevir/KurFarki
   const snapshot = tcmbData

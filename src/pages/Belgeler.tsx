@@ -239,7 +239,7 @@ export default function Belgeler() {
     setUploading(true);
     try {
       const dataUrl = selectedFileData ?? (await readFileAsDataUrl(selectedFile));
-      const yeni = addDocument({
+      const yeni = await addDocument({
         name: form.name || selectedFile.name,
         category: form.category,
         contactId: form.contactId || undefined,
@@ -253,14 +253,9 @@ export default function Belgeler() {
       resetUploadForm();
       // Akıllı okuma açıksa belgeyi hemen okut (anahtar yoksa anahtar istemi açılır)
       if (okuSonra) void belgeyiOku(yeni);
-    } catch (error) {
-      if (error instanceof Error && error.message === "DOC_STORAGE_FULL") {
-        toast.error(
-          "Tarayıcı depolaması dolu. Daha küçük bir dosya deneyin veya eski belgeleri silin.",
-        );
-      } else {
-        toast.error("Dosya okunamadı. Lütfen tekrar deneyin.");
-      }
+    } catch {
+      // IndexedDB yazımı başarısız (çok nadir) — genel hata mesajı
+      toast.error("Belge kaydedilemedi. Lütfen tekrar deneyin.");
     } finally {
       setUploading(false);
     }
@@ -541,7 +536,7 @@ export default function Belgeler() {
     toast.success("Belge güncellendi.");
   };
 
-  const downloadDoc = (doc: StoredDocument) => {
+  const downloadDoc = async (doc: StoredDocument) => {
     const dataUrl = getDocumentDataUrl(doc.id);
     if (!dataUrl) {
       toast.error("Belge verisi bulunamadı.");
@@ -559,7 +554,7 @@ export default function Belgeler() {
     setPreviewDoc(doc);
     setPreviewLoading(true);
     // Lazy yükle: büyük belgelerde listeyi bloklamadan veriyi çek
-    window.setTimeout(() => {
+    window.setTimeout(async () => {
       const dataUrl = getDocumentDataUrl(doc.id);
       setPreviewUrl(dataUrl);
       setPreviewLoading(false);
@@ -986,7 +981,7 @@ export default function Belgeler() {
                           size="icon"
                           className="size-8 text-muted-foreground hover:text-foreground"
                           title="İndir"
-                          onClick={() => downloadDoc(doc)}
+                          onClick={() => void downloadDoc(doc)}
                         >
                           <Download className="size-3.5" />
                         </Button>
@@ -1048,7 +1043,7 @@ export default function Belgeler() {
                   type="button"
                   variant="ghost"
                   size="sm"
-                  onClick={() => {
+                  onClick={async () => {
                     const url = getDocumentDataUrl(previewDoc.id);
                     if (url) {
                       const link = document.createElement("a");
