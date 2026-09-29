@@ -5,11 +5,12 @@ import { getFinanceData, getTodoReminders, type TodoReminder } from "./store";
 import type { UpcomingPayment } from "./types";
 
 /* ─── Storage Keys ─── */
-const NOTIFIED_KEY = "mizan-notified-payments-v1";
-const NOTIFIED_TODO_KEY = "mizan-notified-todos-v1";
 const DISMISSED_KEY = "mizan-dismissed-notifications-v1";
 const READ_KEY = "mizan-read-notifications-v1";
-const LAST_NATIVE_NOTIF_KEY = "mizan-last-native-notif-v1";
+/** Günlük tur durumu: bugün hangi turların tamamlandığı */
+const ROUND_STATE_KEY = "mizan-reminder-rounds-v1";
+/** Acil kalemlerin bugün bildirildiği kaydı (tur beklemeden anında bildirim) */
+const URGENT_NOTIFIED_KEY = "mizan-reminder-urgent-v1";
 
 /* ─── Helpers ─── */
 function daysUntil(dateIso: string): number {
@@ -33,38 +34,33 @@ function saveJsonSet(ids: Set<string>, storageKey: string) {
   } catch {}
 }
 
-/** Günde kaç kez hatırlatma turu yapılır (3–4) */
-export const REMINDERS_PER_DAY = 4;
-/** Turlar arası minimum bekleme (ms) — 6 saat */
-const ROUND_GAP_MS = (24 * 60 * 60 * 1000) / REMINDERS_PER_DAY; // 6h
+/** Günlük hatırlatma turları — kullanıcı gün içinde 3 kez hatırlatılır.
+ *  Sabit saatler (yerel saat): 12:00, 14:00, 16:00. Uygulama o saatte açık değilse
+ *  bir sonraki açılışta ilk fırsatta telafi edilir. */
+export const REMINDER_HOURS = [12, 14, 16] as const;
 
-function daysSinceLastNativeNotif(): number {
-  try {
-    const raw = localStorage.getItem(LAST_NATIVE_NOTIF_KEY);
-    if (!raw) return 999;
-    const last = new Date(raw);
-    const now = new Date();
-    return Math.floor((now.getTime() - last.getTime()) / (1000 * 60 * 60 * 24));
-  } catch {
-    return 999;
-  }
+interface RoundState {
+  day: string;
+  /** Bugün tamamlanan tur sayısı (0–3) */
+  round: number;
 }
 
-function hoursSinceLastNativeNotif(): number {
+function getRoundState(): RoundState {
   try {
-    const raw = localStorage.getItem(LAST_NATIVE_NOTIF_KEY);
-    if (!raw) return 999;
-    const last = new Date(raw);
-    const now = new Date();
-    return (now.getTime() - last.getTime()) / (1000 * 60 * 60);
-  } catch {
-    return 999;
-  }
+    const raw = localStorage.getItem(ROUND_STATE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw) as Partial<RoundState>;
+      if (typeof parsed.day === "string" && typeof parsed.round === "number") {
+        return { day: parsed.day, round: parsed.round };
+      }
+    }
+  } catch {}
+  return { day: todayIso(), round: 0 };
 }
 
-function markNativeNotifSent() {
+function setRoundState(state: RoundState) {
   try {
-    localStorage.setItem(LAST_NATIVE_NOTIF_KEY, new Date().toISOString());
+    localStorage.setItem(ROUND_STATE_KEY, JSON.stringify(state));
   } catch {}
 }
 
@@ -194,32 +190,38 @@ export async function requestNotificationPermission(): Promise<boolean> {
   return result === "granted";
 }
 
-/** Fire native OS notifications — 3-4 rounds per day, ~6h apart.
- *  Her tur yalnızca yeni (o gün bildirilmemiş) hatırlatmaları içerir; tümü bildirilmişse
- *  sessiz kalır, böylece Windows bildirim ekranı dolup taşmaz.
+/** Fire native OS notifications — günde 3 sabit tur (09:00 / 14:00 / 19:00).
+ *  Her tur okunmamış + kapatılmamış tüm hatırlatmaları tek özet bildirimle hatırlatır.
+ *  Ek olarak, bugün vadesi dolan/gecikmiş kalemler ilk kez ortaya çıktığında tur
+ *  beklemeden hemen bildirilir (günde en fazla bir kez acil bildirim).
  */
 export function fireNativeNotifications() {
   if (!("Notification" in window)) return;
   if (Notification.permission !== "granted") return;
 
-  // Günde en fazla REMINDERS_PER_DAY tur; turlar arası en az 6 saat.
-  if (hoursSinceLastNativeNotif() < ROUND_GAP_MS / (1000 * 60 * 60)) return;
+  const reminders = getActiveReminders().filter((r) => !r.read);
+  if (reminders.length === 0) return;
 
-  const reminders = getActiveReminders();
-  if (reminders.length === 0) return; // Hatırlatılacak şey yoksa bildirim gönderme
-
-  // Bu turda daha önce bildirilmemiş, okunmamış hatırlatmaları topla
-  const notified = getJsonSet(NOTIFIED_KEY);
-  const notifiedTodo = getJsonSet(NOTIFIED_TODO_KEY);
   const today = todayIso();
+  const state = getRoundState();
+  const roundsDone = state.day === today ? state.round : 0;
 
-  const fresh = reminders.filter((r) => {
-    if (r.read) return false;
-    const key = `${r.kind}-${r.id}-${today}`;
-    return r.kind === "payment" ? !notified.has(key) : !notifiedTodo.has(key);
-  });
+  // Vadesi gelen turlar: saat 09/14/19'u geçtiyse o tur yapılmalı
+  const nowHour = new Date().getHours();
+  const dueRounds = REMINDER_HOURS.filter((h) => nowHour >= h).length;
+  const roundDue = dueRounds > roundsDone;
 
-  if (fresh.length === 0) return; // Bu tur için yeni hatırlatma yok
+  // Acil kalem: bugün vadesi dolan/gecikmiş ve bugün henüz bildirilmemiş
+  const urgentNotified = getJsonSet(URGENT_NOTIFIED_KEY);
+  const urgent = reminders.filter(
+    (r) =>
+      (r.urgency === "today" || r.urgency === "overdue") &&
+      !urgentNotified.has(`${r.kind}-${r.id}-${today}`),
+  );
+
+  if (!roundDue && urgent.length === 0) return;
+
+  const fresh = roundDue ? reminders : urgent;
 
   // Tek özet bildirimi gönder (Windows bildirim ekranını doldurmasın)
   const payments = fresh.filter((r) => r.kind === "payment");
@@ -256,19 +258,16 @@ export function fireNativeNotifications() {
     new Notification(title, {
       body,
       icon: "/favicon.ico",
-      tag: `mizan-reminder-${today}-${Date.now()}`, // her tur ayrı bildirim
+      tag: `mizan-reminder-${today}-${roundsDone + 1}`,
     });
   } catch {}
 
-  // Bu turdaki tüm kalemleri 'bildirildi' işaretle
-  for (const r of fresh) {
-    const key = `${r.kind}-${r.id}-${today}`;
-    if (r.kind === "payment") notified.add(key);
-    else notifiedTodo.add(key);
+  // Tur ve acil kayıtlarını işaretle
+  if (roundDue) setRoundState({ day: today, round: dueRounds });
+  for (const r of urgent) {
+    urgentNotified.add(`${r.kind}-${r.id}-${today}`);
   }
-  saveJsonSet(notified, NOTIFIED_KEY);
-  saveJsonSet(notifiedTodo, NOTIFIED_TODO_KEY);
-  markNativeNotifSent();
+  if (urgent.length > 0) saveJsonSet(urgentNotified, URGENT_NOTIFIED_KEY);
 }
 
 /* ─── Dismiss / Read / Clear ─── */
@@ -340,11 +339,14 @@ export function restoreAll() {
 /** Clear all notification tracking */
 export function clearAllNotificationData() {
   try {
-    localStorage.removeItem(NOTIFIED_KEY);
-    localStorage.removeItem(NOTIFIED_TODO_KEY);
     localStorage.removeItem(DISMISSED_KEY);
     localStorage.removeItem(READ_KEY);
-    localStorage.removeItem(LAST_NATIVE_NOTIF_KEY);
+    localStorage.removeItem(ROUND_STATE_KEY);
+    localStorage.removeItem(URGENT_NOTIFIED_KEY);
+    // Eski sürüm anahtarları (temizlik)
+    localStorage.removeItem("mizan-notified-payments-v1");
+    localStorage.removeItem("mizan-notified-todos-v1");
+    localStorage.removeItem("mizan-last-native-notif-v1");
   } catch {}
 }
 

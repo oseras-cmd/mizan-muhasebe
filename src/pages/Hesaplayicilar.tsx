@@ -6,6 +6,7 @@ import { PoliceGider } from "@/components/calculators/PoliceGider";
 import { KdvHesap } from "@/components/calculators/KdvHesap";
 import { TevkifatHesap } from "@/components/calculators/TevkifatHesap";
 import { StopajHesap } from "@/components/calculators/StopajHesap";
+import { GelirVergisiDilimHesap } from "@/components/calculators/GelirVergisiDilimHesap";
 import { MaliyetHesap } from "@/components/calculators/MaliyetHesap";
 import { TiftikMaliyet } from "@/components/calculators/TiftikMaliyet";
 import { MesaiHesap } from "@/components/calculators/MesaiHesap";
@@ -56,6 +57,7 @@ import {
   ShieldCheck,
   Stamp,
   Table2,
+  TrendingUp,
   UserRound,
   Users,
   Wallet,
@@ -73,6 +75,7 @@ const TABS = [
   { id: "tevkifat", label: "Tevkifat", icon: FileText },
   { id: "smm", label: "SMM Makbuzu", icon: ReceiptText },
   { id: "stopaj", label: "Stopaj", icon: Building2 },
+  { id: "gvDilim", label: "GV Dilim", icon: TrendingUp },
   { id: "damga", label: "Damga Vergisi", icon: Stamp },
   { id: "giderpusulasi", label: "Gider Pusulası", icon: FileDigit },
   { id: "finansman", label: "Finansman Kısıtlama", icon: Equal },
@@ -98,7 +101,7 @@ type TabId = (typeof TABS)[number]["id"];
 const TAB_GROUPS: { label: string; ids: TabId[] }[] = [
   { label: "Kur & Döviz", ids: ["kur", "kurfarki", "ibkb"] },
   { label: "KDV & Belgeler", ids: ["kdv", "kdvbeyanname", "tevkifat", "smm", "giderpusulasi"] },
-  { label: "Vergi Hesapları", ids: ["stopaj", "damga", "finansman", "binek"] },
+  { label: "Vergi Hesapları", ids: ["stopaj", "gvDilim", "damga", "finansman", "binek"] },
   { label: "Bordro & Personel", ids: ["mesai", "kidem", "giriscikis", "harcirah"] },
   { label: "Maliyet & Varlıklar", ids: ["maliyet", "tiftik", "masraf", "police", "amortisman", "reeskont", "enflasyon"] },
   { label: "Analiz & Takip", ids: ["mizan", "edefter", "mukellef", "takvim"] },
@@ -247,6 +250,7 @@ export default function Hesaplayicilar() {
           {active === "tevkifat" && <TevkifatHesap />}
           {active === "smm" && <SmmMakbuzuHesap />}
           {active === "stopaj" && <StopajHesap />}
+          {active === "gvDilim" && <GelirVergisiDilimHesap />}
           {active === "damga" && <DamgaVergisiHesap />}
           {active === "giderpusulasi" && <GiderPusulasiHesap />}
           {active === "finansman" && <FinansmanKisitlamaHesap />}

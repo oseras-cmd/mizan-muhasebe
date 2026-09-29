@@ -664,6 +664,9 @@ export default function Dashboard() {
           )}
         </section>
 
+        {/* Vergi takvimi — sıradaki son tarihler */}
+        <VergiTakvimiSection />
+
         {/* Geciken ödeme uyarısı */}
         {overdue.length > 0 && (
           <div className="mt-8 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-destructive/30 bg-destructive/[0.05] px-5 py-4">
@@ -859,9 +862,6 @@ export default function Dashboard() {
 
         {/* Nakit akış projeksiyonu */}
         <CashflowSection />
-
-        {/* Vergi takvimi — sıradaki son tarihler */}
-        <VergiTakvimiSection />
 
         {/* Yaklaşan ödemeler + son işlemler */}
         <div className="mt-6 grid gap-6 lg:grid-cols-2">

@@ -95,7 +95,8 @@ export function NotificationCenter() {
   const totalCount = activeReminders.length;
 
   // Uygulama açılışında izni sessizce iste, ardından hatırlatma turlarını başlat.
-  // fireNativeNotifications kendi içinde günde 3-4 tur limiti uygular.
+  // fireNativeNotifications günde 3 sabit turda (12:00 / 14:00 / 16:00) hatırlatır;
+  // acil kalemler (bugün vadesi dolan/gecikmiş) turu beklemeden bildirilir.
   useEffect(() => {
     let cancelled = false;
     const boot = async () => {
