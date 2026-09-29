@@ -62,6 +62,56 @@ function fetchJson(url, headers) {
 
 ipcMain.handle("app:get-version", () => app.getVersion());
 
+/**
+ * TCMB günlük kur XML'ini ana süreçte çeker (renderer'da CORS engellenir,
+ * ana süreçte Node https doğrudan erişir). Bugün-cuma/hafta sonu bugün.xml
+ * 404 verebilir; bu durumda en son iş günü klasöründen kur alınır.
+ */
+ipcMain.handle("tcmb:fetch-today", async () => {
+  const fetchXml = (url) =>
+    new Promise((resolve, reject) => {
+      const req = https.request(url, { method: "GET", headers: { "User-Agent": "Mizan-Desktop" } }, (res) => {
+        if (res.statusCode === 301 || res.statusCode === 302) {
+          res.resume();
+          if (res.headers.location) fetchXml(res.headers.location).then(resolve, reject);
+          else reject(new Error("Redirect without location"));
+          return;
+        }
+        if (res.statusCode !== 200) {
+          res.resume();
+          reject(new Error(`HTTP ${res.statusCode}`));
+          return;
+        }
+        let data = "";
+        res.on("data", (chunk) => (data += chunk));
+        res.on("end", () => resolve(data));
+      });
+      req.on("error", reject);
+      req.setTimeout(15000, () => req.destroy(new Error("timeout")));
+      req.end();
+    });
+
+  // Hafta sonu: bugün.xml 404 → geriye doğru iş günü tara (en fazla 4 gün)
+  for (let back = 0; back < 4; back++) {
+    const d = new Date();
+    d.setDate(d.getDate() - back);
+    const dd = String(d.getDate()).padStart(2, "0");
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const yyyy = d.getFullYear();
+    const url =
+      back === 0
+        ? "https://www.tcmb.gov.tr/kurlar/today.xml"
+        : `https://www.tcmb.gov.tr/kurlar/${yyyy}${mm}/${dd}${mm}${yyyy}.xml`;
+    try {
+      const xml = await fetchXml(url);
+      return { ok: true, xml, url };
+    } catch (err) {
+      if (back === 3) return { ok: false, error: String(err) };
+    }
+  }
+  return { ok: false, error: "unreachable" };
+});
+
 // İsteğe bağlı yapılandırma: userData içinde mizan-updates.json dosyası
 // { "repo": "sahip/depo", "token": "ghp_..." } — özel depolar için gerekir
 function readUpdateConfig() {

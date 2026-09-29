@@ -48,31 +48,57 @@ export function sourceLabel(source: TcmbRatesData["source"]): string {
 
 /**
  * TCMB günlük kur servisi: https://www.tcmb.gov.tr/kurlar/today.xml
- * Bülten no (Kod="..." tarih özniteliği), alış/satış/efektif ve banknote
- * alanlarını resmî olarak döner. CORS başlığı göndermediği için tarayıcıdan
- * doğrudan okunamayabilir; bu durumda yedek kaynağa düşülür (Electron/EXE'de
- * webSecurity kısıtı olmayan çekimlerde doğrudan çalışır).
+ * Bülten no, alış/satış/efektif ve banknote alanlarını resmî olarak döner.
+ *
+ * CORS: TCMB CORS başlığı göndermediği için tarayıcıdan doğrudan okunamaz.
+ * EXE'de istek Electron ana sürecinde (mizanBridge.fetchTcmb) yapılır — CORS
+ * uygulanmaz, her zaman çalışır. Tarayıcıda doğrudan fetch denenir (bazı
+ * ortamlarda proxy CORS ekleyebilir), olmazsa yedek kaynağa düşülür.
  */
 async function fetchFromTcmb(): Promise<TcmbRatesData | null> {
-  try {
-    const res = await fetch("https://www.tcmb.gov.tr/kurlar/today.xml", {
-      cache: "no-store",
-    });
-    if (!res.ok) return null;
-    const xml = new DOMParser().parseFromString(await res.text(), "text/xml");
-    if (xml.querySelector("parsererror")) return null;
+  let xml: string | null = null;
 
-    // Tarih + bülten: <Tarih_Date Date="20260929" BulletinNo="2026/187">
-    const root = xml.querySelector("Tarih_Date");
-    const dateAttr = root?.getAttribute("Date") ?? "";
-    const bulletinNo = root?.getAttribute("BulletinNo") ?? "";
+  // 1a) Electron ana süreç köprüsü (EXE'de birincil yol)
+  if (typeof window !== "undefined" && window.mizanBridge?.fetchTcmb) {
+    try {
+      const result = await window.mizanBridge.fetchTcmb();
+      if (result.ok && result.xml) xml = result.xml;
+    } catch {
+      // köprü başarısız — tarayıcı yolunu dene
+    }
+  }
+
+  // 1b) Tarayıcıdan doğrudan fetch (CORS izin veren ortamlarda çalışır)
+  if (!xml) {
+    try {
+      const res = await fetch("https://www.tcmb.gov.tr/kurlar/today.xml", {
+        cache: "no-store",
+      });
+      if (res.ok) xml = await res.text();
+    } catch {
+      // CORS/ağ hatası — null ile devam
+    }
+  }
+
+  if (!xml) return null;
+  try {
+    const doc = new DOMParser().parseFromString(xml, "text/xml");
+    if (doc.querySelector("parsererror")) return null;
+
+    // Tarih + bülten: <Tarih_Date Tarih="29.09.2026" Date="09/29/2026" Bulten_No="2026/183">
+    const root = doc.querySelector("Tarih_Date");
+    const bulletinNo =
+      root?.getAttribute("Bulten_No") ?? root?.getAttribute("BulletinNo") ?? "";
+    // Date özniteliği MM/DD/YYYY biçimindedir; TR tarihini (Tarih="29.09.2026") tercih et
+    const trDate = root?.getAttribute("Tarih") ?? ""; // 29.09.2026
+    const dateParts = trDate.split(".");
     const date =
-      dateAttr.length === 8
-        ? `${dateAttr.slice(0, 4)}-${dateAttr.slice(4, 6)}-${dateAttr.slice(6, 8)}`
+      dateParts.length === 3
+        ? `${dateParts[2]}-${dateParts[1].padStart(2, "0")}-${dateParts[0].padStart(2, "0")}`
         : new Date().toISOString().slice(0, 10);
 
     const rates: TcmbRate[] = [];
-    for (const node of Array.from(xml.querySelectorAll("Currency"))) {
+    for (const node of Array.from(doc.querySelectorAll("Currency"))) {
       const code = node.getAttribute("CurrencyCode") ?? node.getAttribute("Kod") ?? "";
       if (!POPULAR_CODES.includes(code)) continue;
       const num = (tag: string): number | null => {
@@ -99,7 +125,7 @@ async function fetchFromTcmb(): Promise<TcmbRatesData | null> {
 
     return { date, bulletinNo, rates, source: "tcmb" };
   } catch {
-    // CORS veya ağ hatası — yedeğe düş
+    // XML parse hatası — yedeğe düş
     return null;
   }
 }
