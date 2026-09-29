@@ -28,7 +28,7 @@ import {
 } from "@/lib/finance/format";
 import { addTransaction, useFinanceData } from "@/lib/finance/store";
 import { buildCashflowProjection } from "@/lib/finance/cashflow";
-import { useTcmbRates, POPULAR_CODES, CURRENCY_SYMBOLS, rateChange } from "@/lib/finance/tcmbRates";
+import { useTcmbRates, POPULAR_CODES, CURRENCY_SYMBOLS, rateChange, sourceLabel } from "@/lib/finance/tcmbRates";
 import { takvimSiradaki, AY_ADLARI } from "@/components/calculators/engine/vergiTakvimi";
 import { cn } from "@/lib/utils";
 import type { TransactionCategory } from "@/lib/finance/types";
@@ -572,7 +572,11 @@ export default function Dashboard() {
                 </span>
               </div>
               <p className="mt-0.5 text-xs text-muted-foreground">
-                Güncel döviz kurları — {tcmbData?.date ?? "..."}
+                {tcmbData?.source === "tcmb" ? "TCMB" : sourceLabel(tcmbData?.source ?? "fallback")} —{" "}
+                {tcmbData?.date ?? "..."}
+                {tcmbData?.source === "tcmb" && tcmbData.bulletinNo && (
+                  <span className="ml-1">· Bülten {tcmbData.bulletinNo}</span>
+                )}
                 {countdown && (
                   <span className="ml-2 text-muted-foreground/50">
                     · {countdown} sonra güncellenecek
@@ -658,8 +662,19 @@ export default function Dashboard() {
           )}
 
           {ratesError && (
-            <p className="mt-2 text-xs text-destructive">
-              {ratesError} — gösterilen veriler yaklaşık değerlerdir.
+            <p className="mt-2 text-xs text-muted-foreground">
+              {ratesError}
+            </p>
+          )}
+          {tcmbData?.source === "tcmb" && (
+            <p className="mt-2 text-[11px] text-muted-foreground/60">
+              Kaynak: TCMB resmî günlük kur listesi — muhasebe kayıtlarında esas alınabilecek
+              resmî değerlerdir.
+            </p>
+          )}
+          {tcmbData && tcmbData.source !== "tcmb" && (
+            <p className="mt-2 text-[11px] text-muted-foreground/60">
+              Resmî kur gerektiren hesaplamalarda TCMB günlük bültenini esas alın.
             </p>
           )}
         </section>

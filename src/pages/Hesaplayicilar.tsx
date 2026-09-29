@@ -30,7 +30,7 @@ import { MukellefProfilHesap } from "@/components/calculators/MukellefProfilHesa
 import { VergiTakvimiHesap } from "@/components/calculators/VergiTakvimiHesap";
 import { formatNumber } from "@/components/calculators/shared";
 import { type RateCurrency, type ExchangeRates } from "@/lib/finance/rates";
-import { useTcmbRates } from "@/lib/finance/tcmbRates";
+import { useTcmbRates, sourceLabel } from "@/lib/finance/tcmbRates";
 import { cn } from "@/lib/utils";
 import {
   ArrowLeftRight,
@@ -167,8 +167,8 @@ export default function Hesaplayicilar() {
               <p className="mt-0.5 text-xs text-muted-foreground">
                 {loading && !snapshot
                   ? "Güncelleniyor…"
-                  : snapshot
-                    ? `${snapshot.date} itibarıyla${ratesError ? " · yaklaşık değerler" : ""}`
+                  : tcmbData
+                    ? `${tcmbData.source === "tcmb" ? "TCMB" : sourceLabel(tcmbData.source)} · ${tcmbData.date} itibarıyla${tcmbData.source === "tcmb" && tcmbData.bulletinNo ? ` · Bülten ${tcmbData.bulletinNo}` : ""}${ratesError ? " · " + ratesError : ""}`
                     : ratesError
                       ? ratesError
                       : ""}

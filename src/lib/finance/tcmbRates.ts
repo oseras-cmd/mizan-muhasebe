@@ -14,6 +14,8 @@ export interface TcmbRatesData {
   date: string;
   bulletinNo: string;
   rates: TcmbRate[];
+  /** Kurların çekildiği kaynak: resmî TCMB servisi veya yedek API */
+  source: "tcmb" | "currency-api" | "fallback";
 }
 
 export const POPULAR_CODES = ["USD", "EUR", "GBP", "CHF", "JPY", "SAR", "KWD"];
@@ -29,6 +31,80 @@ export const CURRENCY_SYMBOLS: Record<string, string> = {
 };
 
 const AUTO_REFRESH_MS = 5 * 60 * 1000; // 5 dakika
+
+/** Kullanıcıya gösterilecek kaynak adı */
+export function sourceLabel(source: TcmbRatesData["source"]): string {
+  switch (source) {
+    case "tcmb":
+      return "TCMB resmî kurları";
+    case "currency-api":
+      return "currency-api (yaklaşık, TCMB değil)";
+    case "fallback":
+      return "çevrimdışı yaklaşık değerler";
+  }
+}
+
+/* ─────────────────── 1. Birincil kaynak: TCMB resmî XML ─────────────────── */
+
+/**
+ * TCMB günlük kur servisi: https://www.tcmb.gov.tr/kurlar/today.xml
+ * Bülten no (Kod="..." tarih özniteliği), alış/satış/efektif ve banknote
+ * alanlarını resmî olarak döner. CORS başlığı göndermediği için tarayıcıdan
+ * doğrudan okunamayabilir; bu durumda yedek kaynağa düşülür (Electron/EXE'de
+ * webSecurity kısıtı olmayan çekimlerde doğrudan çalışır).
+ */
+async function fetchFromTcmb(): Promise<TcmbRatesData | null> {
+  try {
+    const res = await fetch("https://www.tcmb.gov.tr/kurlar/today.xml", {
+      cache: "no-store",
+    });
+    if (!res.ok) return null;
+    const xml = new DOMParser().parseFromString(await res.text(), "text/xml");
+    if (xml.querySelector("parsererror")) return null;
+
+    // Tarih + bülten: <Tarih_Date Date="20260929" BulletinNo="2026/187">
+    const root = xml.querySelector("Tarih_Date");
+    const dateAttr = root?.getAttribute("Date") ?? "";
+    const bulletinNo = root?.getAttribute("BulletinNo") ?? "";
+    const date =
+      dateAttr.length === 8
+        ? `${dateAttr.slice(0, 4)}-${dateAttr.slice(4, 6)}-${dateAttr.slice(6, 8)}`
+        : new Date().toISOString().slice(0, 10);
+
+    const rates: TcmbRate[] = [];
+    for (const node of Array.from(xml.querySelectorAll("Currency"))) {
+      const code = node.getAttribute("CurrencyCode") ?? node.getAttribute("Kod") ?? "";
+      if (!POPULAR_CODES.includes(code)) continue;
+      const num = (tag: string): number | null => {
+        // TCMB TR ondalık virgül kullanır: "47,8123"
+        const raw = node.querySelector(tag)?.textContent?.replace(",", ".").trim();
+        const v = raw ? Number(raw) : NaN;
+        return Number.isFinite(v) && v > 0 ? v : null;
+      };
+      const unit = Number(node.querySelector("Unit")?.textContent ?? "1") || 1;
+      const forexBuying = num("ForexBuying");
+      const forexSelling = num("ForexSelling");
+      if (forexBuying === null || forexSelling === null) continue;
+      rates.push({
+        code,
+        name: node.querySelector("CurrencyName")?.textContent?.trim() ?? code,
+        unit,
+        forexBuying,
+        forexSelling,
+        banknoteBuying: num("BanknoteBuying") ?? forexBuying,
+        banknoteSelling: num("BanknoteSelling") ?? forexSelling,
+      });
+    }
+    if (rates.length === 0) return null;
+
+    return { date, bulletinNo, rates, source: "tcmb" };
+  } catch {
+    // CORS veya ağ hatası — yedeğe düş
+    return null;
+  }
+}
+
+/* ─────────────────── 2. Yedek kaynak: açık currency-api ─────────────────── */
 
 /**
  * Build TcmbRate objects from the fawazahmed0 currency-api JSON.
@@ -101,6 +177,7 @@ async function fetchFromCurrencyApi(): Promise<TcmbRatesData | null> {
     date: payload.date ?? new Date().toISOString().slice(0, 10),
     bulletinNo: "",
     rates,
+    source: "currency-api",
   };
 }
 
@@ -109,6 +186,7 @@ function getLocalFallbackRates(): TcmbRatesData {
   return {
     date: new Date().toISOString().slice(0, 10),
     bulletinNo: "",
+    source: "fallback",
     rates: [
       { code: "USD", name: "ABD DOLARI", unit: 1, forexBuying: 47.81, forexSelling: 47.91, banknoteBuying: 47.79, banknoteSelling: 47.98 },
       { code: "EUR", name: "EURO", unit: 1, forexBuying: 55.47, forexSelling: 55.61, banknoteBuying: 55.43, banknoteSelling: 55.69 },
@@ -159,7 +237,18 @@ export function useTcmbRates(): {
     setError(null);
 
     try {
-      const result = await fetchFromCurrencyApi();
+      // 1) TCMB resmî servisi (Electron'da ve CORS izinli ortamda çalışır)
+      let result = await fetchFromTcmb();
+      let sourceNotice: string | null = null;
+
+      // 2) TCMB okunamadıysa açık currency-api (yaklaşık kur — netten türetilmiş)
+      if (!result) {
+        result = await fetchFromCurrencyApi();
+        if (result) {
+          sourceNotice =
+            "TCMB resmî kurlarına ulaşılamadı; yaklaşık değerler gösteriliyor.";
+        }
+      }
 
       if (result) {
         // Bir önceki veriyi kaydet (değişim göstermek için)
@@ -170,6 +259,7 @@ export function useTcmbRates(): {
         setData(result);
         setLastUpdated(new Date());
         setNextRefreshAt(new Date(Date.now() + AUTO_REFRESH_MS));
+        setError(sourceNotice);
       } else {
         setData(getLocalFallbackRates());
         setLastUpdated(new Date());
