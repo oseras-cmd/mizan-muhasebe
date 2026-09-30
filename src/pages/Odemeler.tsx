@@ -59,6 +59,33 @@ import { formatCurrency } from "@/lib/finance/format";
 import { useState, useMemo } from "react";
 import { toast } from "sonner";
 
+const PAYMENT_CURRENCIES: PaymentCurrency[] = ["TRY", "USD", "EUR"];
+
+type CurrencySum = { currency: PaymentCurrency; total: number };
+
+/** Ödemeleri para birimine göre gruplayıp istenen alanın toplamını döndürür (TL/USD/EUR ayrı satır). */
+function sumByCurrency(
+  payments: { currency?: PaymentCurrency; amount: number; paidAmount?: number }[],
+  pick: (p: { amount: number; paidAmount?: number }) => number,
+): CurrencySum[] {
+  const map = new Map<PaymentCurrency, number>();
+  for (const p of payments) {
+    const cur = p.currency ?? "TRY";
+    map.set(cur, (map.get(cur) ?? 0) + pick(p));
+  }
+  return PAYMENT_CURRENCIES.map((currency) => ({
+    currency,
+    total: map.get(currency) ?? 0,
+  })).filter((b) => b.total > 0);
+}
+
+/** Para birimi bazlı toplamları "₺1.234,56 · $100,00 · €50,00" biçiminde birleştirir. */
+function currencyTotalsText(breakdown: CurrencySum[]): string {
+  return breakdown.length > 0
+    ? breakdown.map((b) => formatCurrency(b.total, b.currency)).join(" · ")
+    : formatCurrency(0, "TRY");
+}
+
 type FilterStatus = "tumu" | "bekliyor" | "odendi" | "kismi" | "gecikti";
 
 type ViewMode = "gunluk" | "haftalik";
@@ -104,7 +131,6 @@ export default function Odemeler() {
   const [cashOnHand, setCashOnHand] = useState(0);
 
   const overdue = overduePayments(data);
-  const overdueTotal = overdue.reduce((sum, payment) => sum + payment.amount, 0);
 
   // Filtreleme
   const filteredPayments = useMemo(() => {
@@ -148,7 +174,6 @@ export default function Odemeler() {
     .filter((g): g is PaymentGroup => g !== null);
 
   const paymentCount = filteredPayments.length;
-  const totalAmount = filteredPayments.reduce((sum, p) => sum + p.amount, 0);
 
   /* "Şimdi Ödenecekler" kuyruğu — kullanıcının sürükleyip atadığı ödemeler */
   const queuedPayments = useMemo(
@@ -169,9 +194,30 @@ export default function Odemeler() {
   // Ödeme raporu için istatistikler
   const allPayments = data.upcomingPayments;
   const totalPending = allPayments.reduce((sum, p) => sum + (p.amount - (p.paidAmount ?? 0)), 0);
-  const totalPaid = allPayments.reduce((sum, p) => sum + (p.paidAmount ?? 0), 0);
   const fullyPaidCount = allPayments.filter((p) => (p.paidAmount ?? 0) >= p.amount).length;
   const partialCount = allPayments.filter((p) => (p.paidAmount ?? 0) > 0 && (p.paidAmount ?? 0) < p.amount).length;
+
+  /* Para birimi bazlı dip toplamlar — TL/USD/EUR her zaman ayrı tutulur */
+  const listAmounts = sumByCurrency(filteredPayments, (p) => p.amount);
+  const listPaid = sumByCurrency(filteredPayments, (p) => p.paidAmount ?? 0);
+  const listRemaining = sumByCurrency(filteredPayments, (p) => p.amount - (p.paidAmount ?? 0));
+  const pendingAmounts = sumByCurrency(allPayments, (p) => p.amount - (p.paidAmount ?? 0));
+  const paidAmounts = sumByCurrency(allPayments, (p) => p.paidAmount ?? 0);
+  const overdueAmounts = sumByCurrency(overdue, (p) => p.amount);
+  const queuedAmounts = sumByCurrency(queuedPayments, (p) => p.amount - (p.paidAmount ?? 0));
+
+  const renderBreakdownLines = (breakdown: CurrencySum[], valueClass: string) => {
+    const rows = breakdown.length > 0 ? breakdown : [{ currency: "TRY" as PaymentCurrency, total: 0 }];
+    return (
+      <div className="mt-1 space-y-0.5">
+        {rows.map((b) => (
+          <p key={b.currency} className={cn("font-mono font-semibold tabular-nums", valueClass)}>
+            {formatCurrency(b.total, b.currency)}
+          </p>
+        ))}
+      </div>
+    );
+  };
 
   /* Elindeki para hesabı: bekleyen ödemeler toplamından düşülür */
   const afterPayments = cashOnHand - totalPending;
@@ -227,10 +273,11 @@ export default function Odemeler() {
     setConfirming(null);
     setPartialAmount(0);
     const isFull = !partial || payAmt >= remaining;
+    const cur = payment.currency ?? "TRY";
     toast.success(
       isFull
         ? `"${payment.label}" ödendi olarak işaretlendi.`
-        : `"${payment.label}" için ${formatTRY(payAmt)} ödendi. Kalan: ${formatTRY(remaining - payAmt)}`,
+        : `"${payment.label}" için ${formatCurrency(payAmt, cur)} ödendi. Kalan: ${formatCurrency(remaining - payAmt, cur)}`,
     );
   };
 
@@ -522,6 +569,7 @@ export default function Odemeler() {
     const remaining = payment.amount - paidAmount;
     const hasPartialPayment = paidAmount > 0;
     const isOverdue = new Date(payment.dueDate) < new Date(todayIso()) && remaining > 0;
+    const cur = payment.currency ?? "TRY";
 
     return (
       <li
@@ -575,14 +623,14 @@ export default function Odemeler() {
             <div className="flex items-center gap-2">
               {hasPartialPayment && (
                 <span className="text-xs tabular-nums text-green-600">
-                  {formatTRY(paidAmount)} ✓
+                  {formatCurrency(paidAmount, cur)} ✓
                 </span>
               )}
               <p className={cn(
                 "text-sm tabular-nums font-medium",
                 isOverdue ? "text-destructive" : "text-foreground"
               )}>
-                {hasPartialPayment ? formatTRY(remaining) : formatTRY(payment.amount)}
+                {hasPartialPayment ? formatCurrency(remaining, cur) : formatCurrency(payment.amount, cur)}
               </p>
             </div>
             <p className={cn(
@@ -632,7 +680,7 @@ export default function Odemeler() {
           <p className="text-sm text-gray-600">
             Tarih: {new Date().toLocaleDateString('tr-TR')} · 
             Toplam: {paymentCount} ödeme · 
-            Tutar: {formatTRY(totalAmount)}
+            Tutar: {currencyTotalsText(listAmounts)}
           </p>
         </div>
 
@@ -655,9 +703,7 @@ export default function Odemeler() {
             <div className="flex flex-wrap items-center gap-6">
               <div>
                 <p className="text-[11px] text-muted-foreground">Bekleyen Ödemeler</p>
-                <p className="font-mono text-sm font-semibold tabular-nums text-orange-600">
-                  {formatTRY(totalPending)}
-                </p>
+                {renderBreakdownLines(pendingAmounts, "text-sm text-orange-600")}
               </div>
               <ArrowRight className="size-4 shrink-0 text-muted-foreground/50" />
               <div>
@@ -722,8 +768,15 @@ export default function Odemeler() {
                 <span className="rounded-full bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary">
                   {queuedPayments.length} kalem
                 </span>
-                <span className="font-mono text-sm font-semibold tabular-nums text-foreground">
-                  {formatCurrency(queuedTotal, "TRY")}
+                <span className="flex flex-wrap items-center gap-2">
+                  {queuedAmounts.map((b) => (
+                    <span
+                      key={b.currency}
+                      className="font-mono text-sm font-semibold tabular-nums text-foreground"
+                    >
+                      {formatCurrency(b.total, b.currency)}
+                    </span>
+                  ))}
                 </span>
                 <div className="hidden h-5 w-px bg-border sm:block" />
                 <span className="flex flex-wrap items-center gap-1.5 rounded-md bg-muted/60 px-2.5 py-1 text-xs">
@@ -816,7 +869,7 @@ export default function Odemeler() {
             <div>
               <h2 className="text-sm font-semibold text-foreground">Ödeme Listesi</h2>
               <p className="mt-0.5 text-xs text-muted-foreground">
-                {filteredPayments.length} kalem — toplam {formatTRY(totalAmount)}
+                {filteredPayments.length} kalem — toplam {currencyTotalsText(listAmounts)}
               </p>
             </div>
             <Button
@@ -978,23 +1031,38 @@ export default function Odemeler() {
                     );
                   })
                 )}
-              </tbody>                  {filteredPayments.length > 0 && (
-                    <tfoot>
-                      <tr className="border-t-2 border-border font-semibold text-foreground">
-                        <td colSpan={3} className="px-2 py-2 text-right text-xs">TOPLAM</td>
-                        <td className="px-2 py-2 text-center text-xs">—</td>
+              </tbody>
+              {filteredPayments.length > 0 && (
+                <tfoot>
+                  {listAmounts.map((b, idx) => {
+                    const paidSum = listPaid.find((x) => x.currency === b.currency)?.total ?? 0;
+                    const remainingSum = listRemaining.find((x) => x.currency === b.currency)?.total ?? 0;
+                    return (
+                      <tr
+                        key={b.currency}
+                        className={cn(
+                          "font-semibold text-foreground",
+                          idx === 0 ? "border-t-2 border-border" : "border-t border-border/50",
+                        )}
+                      >
+                        <td colSpan={3} className="px-2 py-2 text-right text-xs">
+                          {idx === 0 ? "TOPLAM" : ""}
+                        </td>
+                        <td className="px-2 py-2 text-center text-xs">{b.currency}</td>
                         <td className="px-2 py-2 text-right tabular-nums text-sm">
-                          {formatTRY(filteredPayments.reduce((s, p) => s + p.amount, 0))}
+                          {formatCurrency(b.total, b.currency)}
                         </td>
                         <td className="px-2 py-2 text-right tabular-nums text-sm text-green-600">
-                          {formatTRY(filteredPayments.reduce((s, p) => s + (p.paidAmount ?? 0), 0))}
+                          {formatCurrency(paidSum, b.currency)}
                         </td>
                         <td className="px-2 py-2 text-right tabular-nums text-sm">
-                          {formatTRY(filteredPayments.reduce((s, p) => s + (p.amount - (p.paidAmount ?? 0)), 0))}
+                          {formatCurrency(remainingSum, b.currency)}
                         </td>
                         <td colSpan={3}></td>
                       </tr>
-                    </tfoot>
+                    );
+                  })}
+                </tfoot>
               )}
             </table>
           </div>
@@ -1030,21 +1098,15 @@ export default function Odemeler() {
                 <div className="grid grid-cols-2 gap-3">
                   <div className="rounded-md border border-border/50 bg-background p-3">
                     <p className="text-xs font-medium text-muted-foreground">Toplam Planlanan</p>
-                    <p className="mt-1 font-mono text-lg font-semibold tabular-nums text-foreground">
-                      {formatTRY(totalAmount)}
-                    </p>
+                    {renderBreakdownLines(listAmounts, "text-lg text-foreground")}
                   </div>
                   <div className="rounded-md border border-border/50 bg-background p-3">
                     <p className="text-xs font-medium text-muted-foreground">Bekleyen Tutar</p>
-                    <p className="mt-1 font-mono text-lg font-semibold tabular-nums text-orange-600">
-                      {formatTRY(totalPending)}
-                    </p>
+                    {renderBreakdownLines(pendingAmounts, "text-lg text-orange-600")}
                   </div>
                   <div className="rounded-md border border-border/50 bg-background p-3">
                     <p className="text-xs font-medium text-muted-foreground">Ödenen Tutar</p>
-                    <p className="mt-1 font-mono text-lg font-semibold tabular-nums text-green-600">
-                      {formatTRY(totalPaid)}
-                    </p>
+                    {renderBreakdownLines(paidAmounts, "text-lg text-green-600")}
                   </div>
                   <div className="rounded-md border border-border/50 bg-background p-3">
                     <p className="text-xs font-medium text-muted-foreground">Geciken Ödeme</p>
@@ -1188,7 +1250,7 @@ export default function Odemeler() {
                 </span>
                 {" · "}toplam{" "}
                 <span className="font-mono font-medium tabular-nums text-foreground">
-                  {formatTRY(totalAmount)}
+                  {currencyTotalsText(listAmounts)}
                 </span>
                 {overdue.length > 0 && (
                   <>
@@ -1213,7 +1275,7 @@ export default function Odemeler() {
                     <p className="mt-0.5 text-xs text-muted-foreground">
                       Vadesi geçmiş {overdue.length} ödeme — toplam{" "}
                       <span className="font-mono tabular-nums">
-                        {formatTRY(overdueTotal)}
+                        {currencyTotalsText(overdueAmounts)}
                       </span>
                     </p>
                   </div>
@@ -1251,7 +1313,7 @@ export default function Odemeler() {
                         </p>
                       </div>
                       <p className="font-mono text-sm tabular-nums text-foreground">
-                        {formatTRY(group.total)}
+                        {currencyTotalsText(sumByCurrency(group.payments, (p) => p.amount))}
                       </p>
                     </div>
                     <ul className="mt-3 divide-y divide-border/70 overflow-hidden rounded-lg border bg-card">

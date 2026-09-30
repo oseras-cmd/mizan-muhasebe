@@ -163,7 +163,12 @@
 
 /* ─── Yazdırma: yalnızca hedef alan temiz çıkar ─── */
 /* Sayfada .print-area varsa odaklı yazdırma uygulanır; yoksa sayfanın kendi
-   print: sınıfları (ör. Ödemeler) aynen çalışmayı sürdürür. */
+   print: sınıfları (ör. Ödemeler) aynen çalışmayı sürdürür.
+
+   Not: visibility + position:absolute kombinasyonu kullanılmaz — mutlak konumlu
+   öğeler Chromium'da tek sayfada kesilir ve uzun raporlarda boş sayfalar üretir.
+   Bunun yerine hedef alanın soyu olmayan her öğe display:none ile akıştan
+   çıkarılır; rapor normal akışta kalıp birden çok sayfaya düzgün dağılır. */
 @media print {
   @page {
     margin: 12mm;
@@ -171,17 +176,27 @@
   body {
     background: #fff !important;
   }
-  body:has(.print-area) * {
-    visibility: hidden;
+  /* .print-area'nın ataları (bunlar korunur) ve kendi soyu hariç her şeyi gizle */
+  body:has(.print-area)
+    *:not(.print-area):not(.print-area *):not(:has(.print-area)) {
+    display: none !important;
   }
-  .print-area,
-  .print-area * {
-    visibility: visible;
+  /* .print-area'ya giden sarmalayıcı zincirini sıfırla — sayfa dolgusu/genişliği
+     ve taşma kırpma etkisini kaldır */
+  body:has(.print-area) :has(.print-area) {
+    display: block !important;
+    position: static !important;
+    float: none !important;
+    overflow: visible !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    width: auto !important;
+    max-width: none !important;
+    min-height: 0 !important;
+    background: #fff !important;
   }
   .print-area {
-    position: absolute !important;
-    left: 0 !important;
-    top: 0 !important;
+    position: static !important;
     width: 100% !important;
     max-width: none !important;
     margin: 0 !important;

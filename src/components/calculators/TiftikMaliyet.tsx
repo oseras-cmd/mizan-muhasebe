@@ -5,12 +5,11 @@ import { formatTRY, formatUSD, parseTurkishNumber } from "@/lib/finance/format";
 import { computeTiftikMaliyet, type EkMaliyet } from "@/lib/finance/tiftik";
 import { cn } from "@/lib/utils";
 import { Plus, RotateCcw, Trash2, Wallet } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   CalcCard,
   Field,
   InfoNote,
-  PrintButton,
   PrintHeader,
   ResultBox,
   ResultRow,
@@ -18,6 +17,7 @@ import {
   Segmented,
   formatNumber,
 } from "./shared";
+import { ExportButtons, type ExcelSection } from "./engine/ExportButtons";
 
 const DEFAULTS = {
   miktar: "11.440",
@@ -150,6 +150,7 @@ function DualValue({
 }
 
 export function TiftikMaliyet({ usdRate }: { usdRate?: number | null }) {
+  const areaRef = useRef<HTMLDivElement>(null);
   const [kayit, setKayit] = useState<TiftikKayit>(loadTiftikKayit);
 
   /* Her değişiklikte kalıcı depoya yaz — son hesaplama korunur */
@@ -258,6 +259,78 @@ export function TiftikMaliyet({ usdRate }: { usdRate?: number | null }) {
   const kiloBasiKar = result?.kiloBasiKar ?? null;
   const kiloBasiKarUSD = result?.kiloBasiKarUSD ?? null;
 
+  /* Excel bölümleri — girdiler, fire akışı, maliyet ve kâr analizi */
+  const excelSections = useMemo<ExcelSection[]>(() => {
+    if (!result) {
+      return [{ title: "Sonuç", rows: [["Geçerli girdi yok — değerleri kontrol edin"]] }];
+    }
+    const k = parsePrice(kayit.kur);
+    const toUsd = (tl: number | null): number | null =>
+      tl == null || k <= 0 ? null : Number((tl / k).toFixed(2));
+    const girdiler: (string | number | null)[][] = [
+      ["Ham Tiftik Miktarı", `${formatNumber(Number.isFinite(hamMiktar) ? hamMiktar : 0, 2, 2)} kg`],
+      ["Alım Fiyatı", `${kayit.alimUsd} ${kayit.alimBirim === "usd" ? "USD/kg" : "₺/kg"}`],
+      ["Kur", `${formatNumber(k || 0, 2, 4)} ₺/USD`],
+      ["Yıkama Firesi", kayit.yikamaFireModu === "oran" ? `%${kayit.yikamaFire}` : `${kayit.yikamaFire} kg`],
+      ["İşleme Firesi", kayit.islemeFireModu === "oran" ? `%${kayit.islemeFire}` : `${kayit.islemeFire} kg`],
+      ["Boz Mal", bozMalEmpty ? "— (girilmedi)" : `${kayit.bozMal} kg`],
+      ["Yıkama Ücreti", `${kayit.yikamaUcreti} ₺/kg`],
+      ["Satış Fiyatı", `${kayit.satisFiyat} ${kayit.satisBirim === "usd" ? "USD/kg" : "₺/kg"}`],
+      ...kayit.ekMaliyetler
+        .filter((e) => e.ad || e.tutar > 0)
+        .map((e) => [`Ek Maliyet — ${e.ad || "Adsız"}`, `${e.tutar} ₺`]),
+    ];
+    return [
+      { title: "Girdiler", headers: ["Parametre", "Değer"], rows: girdiler },
+      {
+        title: "Fire Hesabı",
+        headers: ["Kalem", "kg", "%"],
+        rows: [
+          ["Ham Tiftik", Number.isFinite(hamMiktar) ? hamMiktar : null, null],
+          ["Yıkama Firesi", result.yikamaFireKg, result.yikamaFireOran],
+          ["Boz Mal", result.bozMalFireKg, result.bozMalFireOran],
+          ["İşleme Firesi", result.islemeFireKg, result.islemeFireOran],
+        ],
+        footers: [
+          `Toplam Fire: ${result.toplamFireKg} kg (%${result.toplamFireOran})`,
+          `Net Satılabilir: ${result.netKg} kg`,
+        ],
+      },
+      {
+        title: "Maliyet Kalemleri",
+        headers: ["Kalem", "TL", "USD"],
+        rows: [
+          ["Ham Alım", result.hamAlim, toUsd(result.hamAlim)],
+          ["Yıkama Ücreti", result.yikamaUcretiToplam, toUsd(result.yikamaUcretiToplam)],
+          ...(result.ekMaliyetlerToplam > 0
+            ? ([
+                ["Elle Eklenen Maliyetler", result.ekMaliyetlerToplam, toUsd(result.ekMaliyetlerToplam)],
+              ] as (string | number | null)[][])
+            : []),
+        ],
+        footers: [`Toplam Maliyet: ${result.toplamMaliyet} ₺ · ${result.toplamMaliyetUSD} USD`],
+      },
+      {
+        title: "Satış & Kâr Analizi",
+        headers: ["Kalem", "TL", "USD"],
+        rows: [
+          ["Alış Toplamı", result.alimTL, result.alimUSD],
+          ["Satış Geliri", result.toplamGelir, result.toplamGelirUSD ?? null],
+          ["Kilo Başı Maliyet", result.birimMaliyet ?? null, result.birimMaliyetUSD ?? null],
+          ["Kilo Başı Kâr", result.kiloBasiKar ?? null, result.kiloBasiKarUSD ?? null],
+          ["Brüt Kâr", result.brutKar ?? null, result.brutKarUSD ?? null],
+        ],
+        footers: [
+          `Kâr Marjı: %${result.karMarjiPct}`,
+          `Başabaş Satış Fiyatı: ${result.birimMaliyet ?? "—"} ₺/kg · ${result.basabasUsd ?? "—"} USD/kg`,
+        ],
+        notes: [
+          "Başabaş satış: kilo başı maliyetin karşılandığı fiyat. Satış fiyatı başabaşın altındaysa zarar edilir.",
+        ],
+      },
+    ];
+  }, [result, kayit, bozMalEmpty, hamMiktar]);
+
   function addEkMaliyet() {
     setKayit((prev) => ({
       ...prev,
@@ -294,7 +367,7 @@ export function TiftikMaliyet({ usdRate }: { usdRate?: number | null }) {
   }
 
   return (
-    <div className="print-area">
+    <div className="print-area" ref={areaRef}>
       <PrintHeader
         title="Tiftik Maliyet Hesaplama Raporu"
         subtitle={
@@ -307,8 +380,16 @@ export function TiftikMaliyet({ usdRate }: { usdRate?: number | null }) {
         title="Tiftik Maliyet Hesaplama"
         subtitle="Ham tiftikten satılabilir ürüne: fire akışı, maliyet kalemleri ve kâr analizi"
         actions={
-          <div className="print-hide flex items-center gap-2">
-            <PrintButton />
+          <div className="flex gap-2">
+            <ExportButtons
+              excelName="mizan-tiftik-maliyet"
+              excelTitle="Tiftik Maliyet Hesaplama"
+              excelSheet="Tiftik Maliyet"
+              excelSections={excelSections}
+              pdfTargetRef={areaRef}
+              pdfName="mizan-tiftik-maliyet"
+              disabled={!result}
+            />
             <Button
               type="button"
               variant="outline"
