@@ -22,6 +22,7 @@ import { GirisCikisHesap } from "@/components/calculators/GirisCikisHesap";
 import { HarcirahHesap } from "@/components/calculators/HarcirahHesap";
 import { AmortismanHesap } from "@/components/calculators/AmortismanHesap";
 import { ReeskontHesap } from "@/components/calculators/ReeskontHesap";
+import { AdatHesap } from "@/components/calculators/AdatHesap";
 import { EnflasyonHesap } from "@/components/calculators/EnflasyonHesap";
 import { IbkbHesap } from "@/components/calculators/IbkbHesap";
 import { MizanAnalizHesap } from "@/components/calculators/MizanAnalizHesap";
@@ -57,6 +58,7 @@ import {
   ShieldCheck,
   Stamp,
   Table2,
+  Banknote,
   TrendingUp,
   UserRound,
   Users,
@@ -89,6 +91,7 @@ const TABS = [
   { id: "harcirah", label: "Harcırah", icon: Plane },
   { id: "amortisman", label: "Amortisman", icon: Table2 },
   { id: "reeskont", label: "Reeskont & Adat", icon: Landmark },
+  { id: "adat", label: "Kasa/Cari Adat", icon: Banknote },
   { id: "enflasyon", label: "Enflasyon Düzeltme", icon: BarChart3 },
   { id: "mizan", label: "Mizan Analiz", icon: FileSearch },
   { id: "edefter", label: "XML e-Defter", icon: BookOpenCheck },
@@ -103,7 +106,7 @@ const TAB_GROUPS: { label: string; ids: TabId[] }[] = [
   { label: "KDV & Belgeler", ids: ["kdv", "kdvbeyanname", "tevkifat", "smm", "giderpusulasi"] },
   { label: "Vergi Hesapları", ids: ["stopaj", "gvDilim", "damga", "finansman", "binek"] },
   { label: "Bordro & Personel", ids: ["mesai", "kidem", "giriscikis", "harcirah"] },
-  { label: "Maliyet & Varlıklar", ids: ["maliyet", "tiftik", "masraf", "police", "amortisman", "reeskont", "enflasyon"] },
+  { label: "Maliyet & Varlıklar", ids: ["maliyet", "tiftik", "masraf", "police", "amortisman", "reeskont", "adat", "enflasyon"] },
   { label: "Analiz & Takip", ids: ["mizan", "edefter", "mukellef", "takvim"] },
 ];
 
@@ -266,6 +269,7 @@ export default function Hesaplayicilar() {
           {active === "harcirah" && <HarcirahHesap />}
           {active === "amortisman" && <AmortismanHesap />}
           {active === "reeskont" && <ReeskontHesap />}
+          {active === "adat" && <AdatHesap />}
           {active === "enflasyon" && <EnflasyonHesap />}
           {active === "mizan" && <MizanAnalizHesap />}
           {active === "edefter" && <XmlEdefterHesap />}

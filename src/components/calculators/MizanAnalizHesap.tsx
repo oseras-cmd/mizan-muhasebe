@@ -21,6 +21,34 @@ function bosSatir(): MizanSatir {
   return { hesap: "", ad: "", borcToplam: 0, alacakToplam: 0, borcBakiye: 0, alacakBakiye: 0 };
 }
 
+/** Bir sayfayı MizanSatir[]'e çevirir; geçerli satır yoksa null döner. */
+function sheetToMizan(wb: XLSX.WorkBook, sheetName: string): MizanSatir[] | null {
+  const ws = wb.Sheets[sheetName];
+  if (!ws) return null;
+  const json = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, { defval: 0 });
+  const yeni: MizanSatir[] = [];
+  for (const row of json) {
+    const keys = Object.keys(row);
+    const norm = (s: string) => s.toLocaleLowerCase("tr-TR").replace(/[ıi̇şğüöç]/gi, "").replace(/\s+/g, "");
+    const findKey = (patterns: string[]) => keys.find((k) => patterns.some((p) => norm(k).includes(p)));
+    const kodK = findKey(["hesapkodu", "kod", "hesap"]) ?? keys[0];
+    const adK = findKey(["hesapadi", "ad", "aciklama"]) ?? keys[1];
+    const btK = findKey(["borctoplam", "borc"]);
+    const atK = findKey(["alacktoplam", "alack", "alacakt"]);
+    const bbK = findKey(["borcbakiye"]);
+    const abK = findKey(["alackbakiye", "alacakbakiye"]);
+    const hesap = String(row[kodK] ?? "").trim();
+    if (!hesap) continue;
+    const num = (k?: string) => (k ? (typeof row[k] === "number" ? (row[k] as number) : parseTurkishNumber(String(row[k] ?? "0")) || 0) : 0);
+    yeni.push({
+      hesap, ad: String(row[adK] ?? ""),
+      borcToplam: num(btK), alacakToplam: num(atK),
+      borcBakiye: num(bbK), alacakBakiye: num(abK),
+    });
+  }
+  return yeni.length > 0 ? yeni : null;
+}
+
 function hesapNiteligi(hesap: string): "borc" | "alacak" {
   const g = hesap.slice(0, 1);
   return g === "1" || g === "2" ? "borc" : "alacak";
@@ -34,6 +62,9 @@ export function MizanAnalizHesap() {
   ]);
   const [excelHata, setExcelHata] = useState<string | null>(null);
   const [yukleniyor, setYukleniyor] = useState(false);
+  const [sheetList, setSheetList] = useState<{ ad: string; satir: number }[]>([]);
+  const [seciliSayfa, setSeciliSayfa] = useState<string | null>(null);
+  const wbRef = useRef<XLSX.WorkBook | null>(null);
   const areaRef = useRef<HTMLDivElement>(null);
   const data = useFinanceData();
 
@@ -75,38 +106,41 @@ export function MizanAnalizHesap() {
   const update = (i: number, patch: Partial<MizanSatir>) =>
     setRows((l) => l.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
 
+  const sayfayiUygula = (ad: string) => {
+    const wb = wbRef.current;
+    if (!wb) return;
+    const yeni = sheetToMizan(wb, ad);
+    if (yeni) {
+      setRows(yeni);
+      setSeciliSayfa(ad);
+      setExcelHata(null);
+    } else {
+      setExcelHata(`"${ad}" sayfasında geçerli mizan satırı bulunamadı. Hesap kodu sütunu gerekli.`);
+    }
+  };
+
   const onFile = async (file: File) => {
     setYukleniyor(true);
     setExcelHata(null);
     try {
       const buf = await file.arrayBuffer();
       const wb = XLSX.read(buf, { type: "array" });
-      const ws = wb.Sheets[wb.SheetNames[0]];
-      const json = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, { defval: 0 });
-      const yeni: MizanSatir[] = [];
-      for (const row of json) {
-        const keys = Object.keys(row);
-        const norm = (s: string) => s.toLocaleLowerCase("tr-TR").replace(/[ıi̇şğüöç]/gi, "").replace(/\s+/g, "");
-        const findKey = (patterns: string[]) => keys.find((k) => patterns.some((p) => norm(k).includes(p)));
-        const kodK = findKey(["hesapkodu", "kod", "hesap"]) ?? keys[0];
-        const adK = findKey(["hesapadi", "ad", "aciklama"]) ?? keys[1];
-        const btK = findKey(["borctoplam", "borc"]);
-        const atK = findKey(["alacktoplam", "alack", "alacakt"]);
-        const bbK = findKey(["borcbakiye"]);
-        const abK = findKey(["alackbakiye", "alacakbakiye"]);
-        const hesap = String(row[kodK] ?? "").trim();
-        if (!hesap) continue;
-        const num = (k?: string) => (k ? (typeof row[k] === "number" ? (row[k] as number) : parseTurkishNumber(String(row[k] ?? "0")) || 0) : 0);
-        yeni.push({
-          hesap, ad: String(row[adK] ?? ""),
-          borcToplam: num(btK), alacakToplam: num(atK),
-          borcBakiye: num(bbK), alacakBakiye: num(abK),
-        });
+      wbRef.current = wb;
+      const adaylar = wb.SheetNames.map((ad) => ({ ad, satir: sheetToMizan(wb, ad)?.length ?? 0 }));
+      const gecerli = adaylar.filter((s) => s.satir > 0);
+      if (gecerli.length === 0) {
+        setSheetList([]);
+        setSeciliSayfa(null);
+        wbRef.current = null;
+        setExcelHata("Dosyada geçerli mizan satırı bulunamadı. Hesap kodu sütunu gerekli.");
+        return;
       }
-      if (yeni.length > 0) setRows(yeni);
-      else setExcelHata("Dosyada geçerli mizan satırı bulunamadı. Hesap kodu sütunu gerekli.");
+      setSheetList(gecerli);
+      sayfayiUygula(gecerli[0].ad);
     } catch (e) {
       console.error(e);
+      setSheetList([]);
+      setSeciliSayfa(null);
       setExcelHata("Dosya okunamadı. .xlsx, .xls veya .csv deneyin.");
     } finally {
       setYukleniyor(false);
@@ -203,10 +237,30 @@ export function MizanAnalizHesap() {
               />
               <Upload className="size-5 text-muted-foreground" />
               <p className="text-sm font-medium">Excel Mizan Dosyanızı Sürükleyip Bırakın</p>
-              <p className="text-xs text-muted-foreground">veya tıklayarak seçin (.xlsx, .xls, .csv){yukleniyor ? " — dosya okunuyor…" : ""}</p>
+              <p className="text-xs text-muted-foreground">veya tıklayarak seçin (.xlsx, .xls, .csv) — çok sayfalı dosyalar desteklenir{yukleniyor ? " — dosya okunuyor…" : ""}</p>
             </label>
             {excelHata && (
               <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-2.5 text-xs text-red-700">{excelHata}</div>
+            )}
+            {sheetList.length > 0 && (
+              <div className="rounded-lg border bg-muted/30 px-4 py-3 print-hide">
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Dosyadaki sayfalar ({sheetList.length}) — içe aktarılacak sayfayı seçin</p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {sheetList.map((s) => (
+                    <button
+                      key={s.ad}
+                      type="button"
+                      onClick={() => sayfayiUygula(s.ad)}
+                      className={cn(
+                        "rounded-md border px-3 py-1.5 text-xs transition-colors",
+                        seciliSayfa === s.ad ? "border-foreground bg-foreground text-background" : "hover:bg-muted/60",
+                      )}
+                    >
+                      {s.ad} <span className="opacity-60">({s.satir} satır)</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
             )}
 
             <div className="flex items-center justify-between">
@@ -215,7 +269,7 @@ export function MizanAnalizHesap() {
                 <Plus className="size-3.5" /> Satır
               </Button>
             </div>
-            <p className="text-xs text-muted-foreground">Hesap kodu, hesap adı, borç/alacak toplamları ve bakiyeler. Her satır bir hesap.</p>
+            <p className="text-xs text-muted-foreground">Hesap kodu, hesap adı, borç/alacak toplamları ve bakiyeler. Her satır bir hesap. Excel'deki formüller hesaplanmış sonucu (değer) ile içe aktarılır.</p>
 
             <div className="overflow-x-auto">
               <table className="w-full text-xs">
