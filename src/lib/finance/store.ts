@@ -268,6 +268,8 @@ export interface NewTransactionInput {
   date: string;
   /** Onaylanan belgeden oluşturulduysa bağlı belge */
   documentId?: string;
+  /** Proje/etiket (opsiyonel) */
+  proje?: string;
 }
 
 /** Gelir/gider kaydı ekler ve seçili hesabın bakiyesini anında günceller. */
@@ -1013,7 +1015,6 @@ export interface TodoReminder {
 
 export function getTodoReminders(): TodoReminder[] {
   const now = new Date();
-  const todayStr = todayIso();
   const reminders: TodoReminder[] = [];
 
   for (const task of data.todos) {

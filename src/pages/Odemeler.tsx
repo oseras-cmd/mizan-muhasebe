@@ -16,7 +16,6 @@ import {
 import {
   formatDate,
   formatTRY,
-  parseTurkishNumber,
   todayIso,
 } from "@/lib/finance/format";
 import {
@@ -29,7 +28,9 @@ import {
   useFinanceData,
 } from "@/lib/finance/store";
 import { type RecurringType, type PaymentCurrency, type PaymentCompany, PAYMENT_CURRENCY_OPTIONS, PAYMENT_COMPANIES, RECURRING_LABELS, companyLabel } from "@/lib/finance/types";
+import { useTcmbRates, type TcmbRatesData, type TcmbRate } from "@/lib/finance/tcmbRates";
 import { cn } from "@/lib/utils";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   AlertTriangle,
   ArrowRight,
@@ -41,7 +42,6 @@ import {
   FileText,
   GripVertical,
   History,
-  Hand,
   Pencil,
   Plus,
   Search,
@@ -50,10 +50,10 @@ import {
   Repeat,
   Trash2,
   X,
-  Filter,
   Table,
   LayoutList,
   Coins,
+  Building2,
 } from "lucide-react";
 import { formatCurrency } from "@/lib/finance/format";
 import { useState, useMemo } from "react";
@@ -86,7 +86,75 @@ function currencyTotalsText(breakdown: CurrencySum[]): string {
     : formatCurrency(0, "TRY");
 }
 
+/* ─── Dövizli tutarlar: üzerine gelince/tıklanınca TCMB kuruyla TL karşılığı ─── */
+
+const kurFormat = new Intl.NumberFormat("tr-TR", {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 4,
+});
+
+/**
+ * Döviz cinsinden tutar hücresi. TL tutarlar düz metin kalır; USD/EUR tutarlar
+ * kesikli altı çizgili gösterilir ve fare ile üzerine gelince (veya tıklayınca)
+ * o anki merkez bankası kuruyla TL karşılığı tooltip'te görünür.
+ */
+function MoneyCell({
+  amount,
+  currency,
+  rates,
+  source,
+}: {
+  amount: number;
+  currency: PaymentCurrency;
+  rates: Record<string, TcmbRate>;
+  source?: TcmbRatesData["source"];
+}) {
+  const [open, setOpen] = useState(false);
+  const rate = currency === "TRY" ? undefined : rates[currency];
+  if (!rate) return <>{formatCurrency(amount, currency)}</>;
+
+  /* TCMB alış-satış ortalaması ("merkez" kur); JPY gibi 100 birimlik kurlar için unite bölünür */
+  const kur = (rate.forexBuying + rate.forexSelling) / 2 / rate.unit;
+  const kaynak = source === "tcmb" ? "TCMB kuru" : "yaklaşık kur";
+
+  return (
+    <Tooltip open={open}>
+      <TooltipTrigger
+        asChild
+        onMouseEnter={() => setOpen(true)}
+        onMouseLeave={() => setOpen(false)}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setOpen(false)}
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          setOpen((o) => !o);
+        }}
+      >
+        <span
+          role="button"
+          tabIndex={0}
+          className="cursor-help underline decoration-dotted decoration-muted-foreground/50 underline-offset-4"
+        >
+          {formatCurrency(amount, currency)}
+        </span>
+      </TooltipTrigger>
+      <TooltipContent side="top">
+        <div className="space-y-0.5 text-left">
+          <p className="font-mono text-xs font-semibold tabular-nums">
+            ≈ {formatCurrency(amount * kur, "TRY")}
+          </p>
+          <p className="text-[10px] tabular-nums opacity-80">
+            1 {currency} = {kurFormat.format(kur)} ₺ · {kaynak}
+          </p>
+        </div>
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
 type FilterStatus = "tumu" | "bekliyor" | "odendi" | "kismi" | "gecikti";
+type CompanyFilter = "tumu" | "yok" | PaymentCompany;
 
 type ViewMode = "gunluk" | "haftalik";
 type DisplayMode = "grup" | "tablo";
@@ -123,6 +191,7 @@ export default function Odemeler() {
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState<FilterStatus>("tumu");
+  const [companyFilter, setCompanyFilter] = useState<CompanyFilter>("tumu");
   const [showDialog, setShowDialog] = useState(false);
   const [dragId, setDragId] = useState<string | null>(null);
   const [dragOverQueue, setDragOverQueue] = useState(false);
@@ -131,6 +200,15 @@ export default function Odemeler() {
   const [cashOnHand, setCashOnHand] = useState(0);
 
   const overdue = overduePayments(data);
+
+  /* TCMB canlı kurları — dövizli tutarların TL karşılığı için (5 dakikada bir yenilenir) */
+  const tcmb = useTcmbRates();
+  const tcmbSource = tcmb.data?.source;
+  const ratesByCode = useMemo(() => {
+    const map: Record<string, TcmbRate> = {};
+    for (const r of tcmb.data?.rates ?? []) map[r.code] = r;
+    return map;
+  }, [tcmb.data]);
 
   // Filtreleme
   const filteredPayments = useMemo(() => {
@@ -141,6 +219,12 @@ export default function Odemeler() {
       if (q && !p.label.toLowerCase().includes(q) && !(p.description ?? "").toLowerCase().includes(q)) {
         const contact = p.contactId ? contactById(data, p.contactId) : undefined;
         if (!contact || !contact.name.toLowerCase().includes(q)) return false;
+      }
+      // Şirket filtresi
+      if (companyFilter === "yok") {
+        if (p.company) return false;
+      } else if (companyFilter !== "tumu" && p.company !== companyFilter) {
+        return false;
       }
       // Durum filtresi
       const paid = p.paidAmount ?? 0;
@@ -153,7 +237,36 @@ export default function Odemeler() {
         default: return true;
       }
     });
-  }, [data, searchQuery, filterStatus]);
+  }, [data, searchQuery, filterStatus, companyFilter]);
+
+  /* Şirket (Ferla/Meskur) borç özeti — tüm ödemeler üzerinden hesaplanır */
+  const hasUnassigned = data.upcomingPayments.some((p) => !p.company);
+  const companyFilterOptions: { key: CompanyFilter; label: string }[] = [
+    { key: "tumu", label: "Tümü" },
+    ...PAYMENT_COMPANIES.map((c) => ({ key: c.value as CompanyFilter, label: c.label })),
+    ...(hasUnassigned ? [{ key: "yok" as CompanyFilter, label: "Atanmamış" }] : []),
+  ];
+  const companySummaries = useMemo(() => {
+    const defs: { key: CompanyFilter; label: string }[] = PAYMENT_COMPANIES.map((c) => ({
+      key: c.value as CompanyFilter,
+      label: c.label,
+    }));
+    if (data.upcomingPayments.some((p) => !p.company)) {
+      defs.push({ key: "yok", label: "Atanmamış" });
+    }
+    return defs.map((def) => {
+      const items = data.upcomingPayments.filter((p) =>
+        def.key === "yok" ? !p.company : p.company === def.key,
+      );
+      const unpaid = items.filter((p) => (p.paidAmount ?? 0) < p.amount);
+      return {
+        key: def.key,
+        label: def.label,
+        count: unpaid.length,
+        remaining: sumByCurrency(unpaid, (p) => p.amount - (p.paidAmount ?? 0)),
+      };
+    });
+  }, [data.upcomingPayments]);
 
   const rawGroups: PaymentGroup[] =
     view === "gunluk"
@@ -623,14 +736,27 @@ export default function Odemeler() {
             <div className="flex items-center gap-2">
               {hasPartialPayment && (
                 <span className="text-xs tabular-nums text-green-600">
-                  {formatCurrency(paidAmount, cur)} ✓
+                  {cur === "TRY" ? (
+                    formatCurrency(paidAmount, cur)
+                  ) : (
+                    <MoneyCell amount={paidAmount} currency={cur} rates={ratesByCode} source={tcmbSource} />
+                  )} ✓
                 </span>
               )}
               <p className={cn(
                 "text-sm tabular-nums font-medium",
                 isOverdue ? "text-destructive" : "text-foreground"
               )}>
-                {hasPartialPayment ? formatCurrency(remaining, cur) : formatCurrency(payment.amount, cur)}
+                {cur === "TRY" ? (
+                  hasPartialPayment ? formatCurrency(remaining, cur) : formatCurrency(payment.amount, cur)
+                ) : (
+                  <MoneyCell
+                    amount={hasPartialPayment ? remaining : payment.amount}
+                    currency={cur}
+                    rates={ratesByCode}
+                    source={tcmbSource}
+                  />
+                )}
               </p>
             </div>
             <p className={cn(
@@ -980,12 +1106,20 @@ export default function Odemeler() {
                           </span>
                         </td>
                         <td className="px-2 py-2 text-right tabular-nums font-medium text-foreground">
-                          {formatCurrency(payment.amount, cur)}
+                          {cur === "TRY" ? (
+                            formatCurrency(payment.amount, cur)
+                          ) : (
+                            <MoneyCell amount={payment.amount} currency={cur} rates={ratesByCode} source={tcmbSource} />
+                          )}
                         </td>
                         <td className="px-2 py-2 text-right tabular-nums">
                           {paid > 0 ? (
                             <span className="text-green-600">
-                              {formatCurrency(paid, cur)}
+                              {cur === "TRY" ? (
+                                formatCurrency(paid, cur)
+                              ) : (
+                                <MoneyCell amount={paid} currency={cur} rates={ratesByCode} source={tcmbSource} />
+                              )}
                               <span className="ml-1 text-[9px]">%{progress}</span>
                             </span>
                           ) : (
@@ -997,7 +1131,15 @@ export default function Odemeler() {
                             "font-medium",
                             isOverdue ? "text-destructive" : "text-foreground",
                           )}>
-                            {remaining > 0 ? formatCurrency(remaining, cur) : <span className="text-green-600">✓</span>}
+                            {remaining > 0 ? (
+                              cur === "TRY" ? (
+                                formatCurrency(remaining, cur)
+                              ) : (
+                                <MoneyCell amount={remaining} currency={cur} rates={ratesByCode} source={tcmbSource} />
+                              )
+                            ) : (
+                              <span className="text-green-600">✓</span>
+                            )}
                           </span>
                         </td>
                         <td className="px-2 py-2 text-center">
@@ -1050,10 +1192,18 @@ export default function Odemeler() {
                         </td>
                         <td className="px-2 py-2 text-center text-xs">{b.currency}</td>
                         <td className="px-2 py-2 text-right tabular-nums text-sm">
-                          {formatCurrency(b.total, b.currency)}
+                          {b.currency === "TRY" ? (
+                            formatCurrency(b.total, b.currency)
+                          ) : (
+                            <MoneyCell amount={b.total} currency={b.currency} rates={ratesByCode} source={tcmbSource} />
+                          )}
                         </td>
                         <td className="px-2 py-2 text-right tabular-nums text-sm text-green-600">
-                          {formatCurrency(paidSum, b.currency)}
+                          {paidSum > 0 && b.currency !== "TRY" ? (
+                            <MoneyCell amount={paidSum} currency={b.currency} rates={ratesByCode} source={tcmbSource} />
+                          ) : (
+                            formatCurrency(paidSum, b.currency)
+                          )}
                         </td>
                         <td className="px-2 py-2 text-right tabular-nums text-sm">
                           {formatCurrency(remainingSum, b.currency)}
@@ -1177,6 +1327,86 @@ export default function Odemeler() {
                     {f.label}
                   </button>
                 ))}
+              </div>
+            </div>
+
+            {/* Şirket filtresi + borç özeti */}
+            <div className="mb-4 space-y-3 print:hidden">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                  <Building2 className="size-3.5" />
+                  Şirket
+                </span>
+                <div className="flex items-center gap-1 rounded-md border border-border/70 bg-card p-0.5">
+                  {companyFilterOptions.map((f) => (
+                    <button
+                      key={f.key}
+                      type="button"
+                      onClick={() => setCompanyFilter(f.key)}
+                      className={cn(
+                        "rounded-[5px] px-2.5 py-1 text-xs font-medium transition-colors",
+                        companyFilter === f.key
+                          ? "bg-primary text-primary-foreground shadow-sm"
+                          : "text-muted-foreground hover:text-foreground",
+                      )}
+                    >
+                      {f.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                {companySummaries.map((cs) => {
+                  const active = companyFilter === cs.key;
+                  return (
+                    <button
+                      key={cs.key}
+                      type="button"
+                      onClick={() => setCompanyFilter(active ? "tumu" : cs.key)}
+                      className={cn(
+                        "flex flex-col gap-1 rounded-lg border p-3 text-left transition-colors",
+                        active
+                          ? "border-primary bg-primary/[0.06]"
+                          : "border-border/70 bg-card hover:bg-muted/30",
+                      )}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span
+                          className={cn(
+                            "text-xs font-semibold",
+                            active ? "text-primary" : "text-foreground",
+                          )}
+                        >
+                          {cs.label}
+                        </span>
+                        <span className="rounded-full bg-muted/60 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                          {cs.count} bekleyen
+                        </span>
+                      </div>
+                      {cs.remaining.length > 0 ? (
+                        cs.remaining.map((b) => {
+                          const r = b.currency === "TRY" ? undefined : ratesByCode[b.currency];
+                          const kur = r ? (r.forexBuying + r.forexSelling) / 2 / r.unit : undefined;
+                          return (
+                            <p
+                              key={b.currency}
+                              className="font-mono text-sm font-semibold tabular-nums text-foreground"
+                            >
+                              {formatCurrency(b.total, b.currency)}
+                              {kur ? (
+                                <span className="ml-1.5 text-[11px] font-normal tabular-nums text-muted-foreground">
+                                  ≈ {formatCurrency(b.total * kur, "TRY")}
+                                </span>
+                              ) : null}
+                            </p>
+                          );
+                        })
+                      ) : (
+                        <p className="text-xs font-medium text-emerald-600">Borcu yok ✓</p>
+                      )}
+                    </button>
+                  );
+                })}
               </div>
             </div>
 

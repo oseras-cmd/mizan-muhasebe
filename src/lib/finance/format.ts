@@ -130,3 +130,15 @@ export function parseInputValue(formatted: string): number {
   if (!cleaned) return 0;
   return Number(cleaned);
 }
+
+/**
+ * Sayıyı Türkçe input biçimine çevirir (1234.5 → "1.234,5").
+ * formatInputValue(String(x)) tuzağının yerine kullanılır: String(x) noktayı
+ * ondalık ayıracı olarak üretir, formatInputValue ise noktayı binlik ayıracı
+ * sanıp siler (1234.5 → "12345" — 10 kat şişme). Kuruşlu tutarlar için
+ * her zaman bu fonksiyon kullanılmalıdır.
+ */
+export function formatNumberInput(value: number): string {
+  if (!Number.isFinite(value) || value === 0) return "";
+  return value.toLocaleString("tr-TR", { maximumFractionDigits: 2 });
+}

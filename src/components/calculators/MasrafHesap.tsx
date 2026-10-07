@@ -1,4 +1,4 @@
-import { formatInputValue } from "@/lib/finance/format";
+import { formatNumberInput } from "@/lib/finance/format";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -532,7 +532,7 @@ export function MasrafHesap() {
                 <Input
                   type="text"
                   inputMode="decimal"
-                  value={formatInputValue(String(form.fisToplam))}
+                  value={formatNumberInput(form.fisToplam)}
                   onChange={(e) => setForm({ ...form, fisToplam: parseTurkishNumber(e.target.value) })}
                   placeholder="0,00"
                   className="h-9 text-sm tabular-nums"
@@ -609,7 +609,7 @@ export function MasrafHesap() {
                 <Input
                   type="text"
                   inputMode="decimal"
-                  value={formatInputValue(String(form.kkeg))}
+                  value={formatNumberInput(form.kkeg)}
                   onChange={(e) => setForm({ ...form, kkeg: parseTurkishNumber(e.target.value) })}
                   placeholder="0,00"
                   className="h-9 text-sm tabular-nums"

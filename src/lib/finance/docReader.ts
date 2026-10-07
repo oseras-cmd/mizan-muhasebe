@@ -5,9 +5,12 @@
  * Önemli: Çıkan sonuç bir TASLAKTIR. Kayıt, muhasebeci onaylamadan
  * hiçbir finansal veriye yazılmaz (bkz. Belgeler sayfası / store).
  */
-import type { BelgeOkuma, BelgeTuru, BelgeYon } from "./types";
+import { TRANSACTION_CATEGORIES } from "./types";
+import type { BelgeKalem, BelgeOkuma, BelgeTuru, BelgeYon, TransactionCategory } from "./types";
 
 const KEY_STORAGE = "mizan-google-api-key";
+/** Kullanıcının Ayarlar'dan girdiği ek AI talimatları (prompt) */
+const PROMPT_EK_STORAGE = "mizan-ai-prompt-ek";
 /** Birincil model; bulunamazsa yedeğe düşülür. */
 const MODELS = ["gemini-2.5-flash", "gemini-2.0-flash"];
 
@@ -99,6 +102,45 @@ function toIsoDate(value: unknown): string {
 const TUR_LERI: BelgeTuru[] = ["fatura", "fis", "makbuz", "dekont", "beyanname", "diger"];
 const YON_LER: BelgeYon[] = ["gelir", "gider", "belirsiz"];
 
+/** Modelin önerdiği kategoriyi geçerli listeden doğrular; değilse undefined. */
+function normalizeKategori(value: unknown): TransactionCategory | undefined {
+  if (typeof value !== "string") return undefined;
+  const v = value.trim();
+  return (TRANSACTION_CATEGORIES as readonly string[]).includes(v)
+    ? (v as TransactionCategory)
+    : undefined;
+}
+
+/** Modelin verdiği satır kalemlerini güvenli biçimde ayrıştırır. */
+function normalizeKalemler(value: unknown): BelgeKalem[] | undefined {
+  if (!Array.isArray(value) || value.length === 0) return undefined;
+  const round2 = (n: number) => Math.round(n * 100) / 100;
+  const kalemler: BelgeKalem[] = [];
+  for (const raw of value.slice(0, 50)) {
+    if (typeof raw !== "object" || raw === null) continue;
+    const obj = raw as Record<string, unknown>;
+    const ad = typeof obj.ad === "string" ? obj.ad.trim() : "";
+    if (!ad) continue;
+    const miktar = toNumber(obj.miktar, 1) || 1;
+    const birimFiyat = Math.max(0, toNumber(obj.birimFiyat));
+    const kdvOrani = Math.min(100, Math.max(0, toNumber(obj.kdvOrani)));
+    let toplam = Math.max(0, toNumber(obj.toplam));
+    if (toplam === 0 && birimFiyat > 0) {
+      // Toplam verilmemişse miktar × birim fiyat + KDV'den hesapla
+      toplam = round2(miktar * birimFiyat * (1 + kdvOrani / 100));
+    }
+    if (toplam <= 0) continue;
+    kalemler.push({
+      ad,
+      miktar,
+      birimFiyat: round2(birimFiyat),
+      kdvOrani,
+      toplam: round2(toplam),
+    });
+  }
+  return kalemler.length > 0 ? kalemler : undefined;
+}
+
 const PROMPT = `Sağdaki mali belgeyi (fatura, fiş, makbuz, dekont veya beyanname) oku ve SADECE şu şemada JSON döndür:
 {
   "belgeTuru": "fatura" | "fis" | "makbuz" | "dekont" | "beyanname" | "diger",
@@ -111,14 +153,41 @@ const PROMPT = `Sağdaki mali belgeyi (fatura, fiş, makbuz, dekont veya beyanna
   "kdvOrani": yüzde sayı (0, 1, 10 veya 20),
   "kdvTutar": sayı,
   "toplamTutar": sayı,
+  "kategori": belgenin içeriğine en uygun kategori adı,
+  "kalemler": [{ "ad": "string", "miktar": sayı, "birimFiyat": sayı, "kdvOrani": sayı, "toplam": sayı }],
   "guven": 0 ile 1 arası sayı,
   "not": "belirsiz veya okunamayan noktalar hakkında kısa Türkçe not"
 }
 Kurallar:
 - "yon": işletmeye giren para ise "gelir" (satış faturası/tahsilat), çıkan para ise "gider" (alış faturası/ödeme); anlaşılamıyorsa "belirsiz".
+- "kategori" SADECE şu listeden biri olmalı: ${TRANSACTION_CATEGORIES.join(", ")}. Gelir belgelerinde genellikle "Satış", "Hizmet" veya "Tahsilat"; gider belgelerinde içeriğe uygun masraf kategorisi (kira, fatura, vergi, malzeme, ulaşım vb.) seç.
+- "kalemler": belgede kalem/fatura satırı listesi varsa her satırı ayrı ayrı çıkar: ad, miktar, birim fiyat, KDV oranı ve KDV dahil toplam. Liste yoksa veya okunamıyorsa boş dizi [] döndür.
 - Tüm sayılar TL olarak düz ondalık sayı olsun (binlik ayracı kullanma).
 - Tarih bilinmiyorsa bugünün tarihini değil, boş string kullan.
 - Sadece belgede açıkça yazan bilgileri ver; uydurma yok.`;
+
+/**
+ * Ayarlar'dan girilen ek AI talimatlarını okur.
+ * Bu ek, ana prompt'un sonuna eklenir; JSON şemasını değiştirmez.
+ */
+export function getPromptEk(): string {
+  try {
+    return (window.localStorage.getItem(PROMPT_EK_STORAGE) ?? "").trim();
+  } catch {
+    return "";
+  }
+}
+
+/** Ek AI talimatlarını kaydeder (boş string = temizle). */
+export function setPromptEk(value: string) {
+  try {
+    const v = value.trim();
+    if (v) window.localStorage.setItem(PROMPT_EK_STORAGE, v);
+    else window.localStorage.removeItem(PROMPT_EK_STORAGE);
+  } catch {
+    // localStorage kapalı olabilir — sessizce geç
+  }
+}
 
 function splitDataUrl(dataUrl: string): { mimeType: string; data: string } | null {
   const match = /^data:([^;,]+)?(;base64)?,(.*)$/s.exec(dataUrl);
@@ -168,6 +237,12 @@ function normalize(raw: unknown): BelgeOkuma {
   const kdvOrani = Math.min(100, Math.max(0, toNumber(obj.kdvOrani)));
   let kdvTutar = toNumber(obj.kdvTutar);
   let toplamTutar = toNumber(obj.toplamTutar);
+  const kategori = normalizeKategori(obj.kategori);
+  const kalemler = normalizeKalemler(obj.kalemler);
+  const ekAlanlar = {
+    ...(kategori ? { kategori } : {}),
+    ...(kalemler ? { kalemler } : {}),
+  };
 
   if (kdvTutar === 0 && matrah > 0 && kdvOrani > 0) {
     kdvTutar = Math.round(matrah * (kdvOrani / 100) * 100) / 100;
@@ -192,6 +267,7 @@ function normalize(raw: unknown): BelgeOkuma {
       toplamTutar,
       guven: Math.min(1, Math.max(0, toNumber(obj.guven, 0.5))),
       not: typeof obj.not === "string" ? obj.not.trim() : "",
+      ...ekAlanlar,
     };
   }
 
@@ -208,6 +284,7 @@ function normalize(raw: unknown): BelgeOkuma {
     toplamTutar: Math.round(toplamTutar * 100) / 100,
     guven: Math.min(1, Math.max(0, toNumber(obj.guven, 0.5))),
     not: typeof obj.not === "string" ? obj.not.trim() : "",
+    ...ekAlanlar,
   };
 }
 
@@ -233,13 +310,20 @@ export async function belgeOku(
   const parts = splitDataUrl(dataUrl);
   if (!parts) throw new Error("Belge verisi okunamadı.");
 
+  // Kullanıcının Ayarlar'dan verdiği ek talimatlar ana prompt'a eklenir;
+  // JSON şeması korunur (yalnızca çıkarımı yönlendirirler).
+  const ek = getPromptEk();
+  const prompt = ek
+    ? `${PROMPT}\nEk talimatlar (yalnızca çıkarımı yönlendirir, JSON şemasını ve alan adlarını DEĞİŞTİRMEZ):\n${ek}`
+    : PROMPT;
+
   const payload = {
     contents: [
       {
         role: "user",
         parts: [
           { inlineData: { mimeType: parts.mimeType || mime, data: parts.data } },
-          { text: PROMPT },
+          { text: prompt },
         ],
       },
     ],

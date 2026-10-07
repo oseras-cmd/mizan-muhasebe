@@ -4,7 +4,7 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
-  formatInputValue,
+  formatNumberInput,
   parseTurkishNumber,
   formatTRY,
 } from "@/lib/finance/format";
@@ -69,7 +69,7 @@ function Row({
       {onChange ? (
         <td className="w-36 px-4 py-1.5">
           <Input
-            value={value ? formatInputValue(String(value)) : ""}
+            value={value ? formatNumberInput(value) : ""}
             onChange={(e) => onChange(parseTurkishNumber(e.target.value))}
             placeholder="0,00"
             inputMode="decimal"
@@ -186,7 +186,7 @@ export function KdvBeyannameHesap() {
             <div className="flex flex-col gap-1.5">
               <Label className="text-xs font-medium text-muted-foreground">%1 KDV'li Satış Matrahı</Label>
               <Input
-                value={input.satis1 ? formatInputValue(String(input.satis1)) : ""}
+                value={input.satis1 ? formatNumberInput(input.satis1) : ""}
                 onChange={(e) => set({ satis1: parseTurkishNumber(e.target.value) })}
                 placeholder="0,00"
                 inputMode="decimal"
@@ -196,7 +196,7 @@ export function KdvBeyannameHesap() {
             <div className="flex flex-col gap-1.5">
               <Label className="text-xs font-medium text-muted-foreground">%10 KDV'li Satış Matrahı</Label>
               <Input
-                value={input.satis10 ? formatInputValue(String(input.satis10)) : ""}
+                value={input.satis10 ? formatNumberInput(input.satis10) : ""}
                 onChange={(e) => set({ satis10: parseTurkishNumber(e.target.value) })}
                 placeholder="0,00"
                 inputMode="decimal"
@@ -206,7 +206,7 @@ export function KdvBeyannameHesap() {
             <div className="flex flex-col gap-1.5">
               <Label className="text-xs font-medium text-muted-foreground">%20 KDV'li Satış Matrahı</Label>
               <Input
-                value={input.satis20 ? formatInputValue(String(input.satis20)) : ""}
+                value={input.satis20 ? formatNumberInput(input.satis20) : ""}
                 onChange={(e) => set({ satis20: parseTurkishNumber(e.target.value) })}
                 placeholder="0,00"
                 inputMode="decimal"
@@ -216,7 +216,7 @@ export function KdvBeyannameHesap() {
             <div className="flex flex-col gap-1.5">
               <Label className="text-xs font-medium text-muted-foreground">KDV'den İstisna Satışlar</Label>
               <Input
-                value={input.istisnaSatis ? formatInputValue(String(input.istisnaSatis)) : ""}
+                value={input.istisnaSatis ? formatNumberInput(input.istisnaSatis) : ""}
                 onChange={(e) => set({ istisnaSatis: parseTurkishNumber(e.target.value) })}
                 placeholder="0,00"
                 inputMode="decimal"
@@ -235,7 +235,7 @@ export function KdvBeyannameHesap() {
             <div className="flex flex-col gap-1.5">
               <Label className="text-xs font-medium text-muted-foreground">%1 KDV'li Alış Matrahı</Label>
               <Input
-                value={input.alis1 ? formatInputValue(String(input.alis1)) : ""}
+                value={input.alis1 ? formatNumberInput(input.alis1) : ""}
                 onChange={(e) => set({ alis1: parseTurkishNumber(e.target.value) })}
                 placeholder="0,00"
                 inputMode="decimal"
@@ -245,7 +245,7 @@ export function KdvBeyannameHesap() {
             <div className="flex flex-col gap-1.5">
               <Label className="text-xs font-medium text-muted-foreground">%10 KDV'li Alış Matrahı</Label>
               <Input
-                value={input.alis10 ? formatInputValue(String(input.alis10)) : ""}
+                value={input.alis10 ? formatNumberInput(input.alis10) : ""}
                 onChange={(e) => set({ alis10: parseTurkishNumber(e.target.value) })}
                 placeholder="0,00"
                 inputMode="decimal"
@@ -255,7 +255,7 @@ export function KdvBeyannameHesap() {
             <div className="flex flex-col gap-1.5">
               <Label className="text-xs font-medium text-muted-foreground">%20 KDV'li Alış Matrahı</Label>
               <Input
-                value={input.alis20 ? formatInputValue(String(input.alis20)) : ""}
+                value={input.alis20 ? formatNumberInput(input.alis20) : ""}
                 onChange={(e) => set({ alis20: parseTurkishNumber(e.target.value) })}
                 placeholder="0,00"
                 inputMode="decimal"
@@ -275,7 +275,7 @@ export function KdvBeyannameHesap() {
           <div className="flex flex-col gap-1.5">
             <Label className="text-xs font-medium text-muted-foreground">Önceki Dönemden Devreden KDV</Label>
             <Input
-              value={input.devredenOnceki ? formatInputValue(String(input.devredenOnceki)) : ""}
+              value={input.devredenOnceki ? formatNumberInput(input.devredenOnceki) : ""}
               onChange={(e) => set({ devredenOnceki: parseTurkishNumber(e.target.value) })}
               placeholder="0,00"
               inputMode="decimal"
@@ -285,7 +285,7 @@ export function KdvBeyannameHesap() {
           <div className="flex flex-col gap-1.5">
             <Label className="text-xs font-medium text-muted-foreground">Tevkifata Tabi Satış KDV'si (Alıcı Kesintisi)</Label>
             <Input
-              value={input.tevkifatSatis ? formatInputValue(String(input.tevkifatSatis)) : ""}
+              value={input.tevkifatSatis ? formatNumberInput(input.tevkifatSatis) : ""}
               onChange={(e) => set({ tevkifatSatis: parseTurkishNumber(e.target.value) })}
               placeholder="0,00"
               inputMode="decimal"

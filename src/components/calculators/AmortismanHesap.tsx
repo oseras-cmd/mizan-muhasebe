@@ -1,4 +1,4 @@
-import { formatInputValue, parseTurkishNumber } from "@/lib/finance/format";
+import { formatNumberInput, parseTurkishNumber } from "@/lib/finance/format";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
@@ -129,7 +129,7 @@ export function AmortismanHesap() {
                       <Input value={k.ad} onChange={(e) => update(k.id, { ad: e.target.value })} placeholder="örn. Binek oto" />
                     </Field>
                     <Field label="Alış Bedeli (₺)">
-                      <Input type="text" inputMode="decimal" value={k.bedel ? formatInputValue(String(k.bedel)) : ""} onChange={(e) => update(k.id, { bedel: parseTurkishNumber(e.target.value) || 0 })} className="tabular-nums" placeholder="0,00" />
+                      <Input type="text" inputMode="decimal" value={k.bedel ? formatNumberInput(k.bedel) : ""} onChange={(e) => update(k.id, { bedel: parseTurkishNumber(e.target.value) || 0 })} className="tabular-nums" placeholder="0,00" />
                     </Field>
                     <Field label="Faydalı Ömür (Yıl)">
                       <Input type="text" inputMode="numeric" value={String(k.faydaliOmr)} onChange={(e) => update(k.id, { faydaliOmr: Math.max(1, parseInt(e.target.value) || 1) })} className="tabular-nums" />

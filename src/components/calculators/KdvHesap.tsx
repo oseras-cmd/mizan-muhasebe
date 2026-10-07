@@ -69,11 +69,19 @@ export function KdvHesap() {
         />
         <div className="grid gap-5 sm:grid-cols-2">
           <Field
-            label={tip === "kdvden" ? "KDV Tutarı (₺)" : "Tutar (₺)"}
+            label={
+              tip === "kdvden"
+                ? "KDV Tutarı (₺)"
+                : tip === "dahil"
+                  ? "KDV Dahil Tutar (₺)"
+                  : "KDV Hariç Tutar / Matrah (₺)"
+            }
             hint={
               tip === "kdvden"
                 ? "Girdiğiniz tutar KDV tutarıdır — Matrah = KDV ÷ Oran"
-                : undefined
+                : tip === "dahil"
+                  ? "Girdiğiniz tutarın içinde KDV vardır — matrah ve KDV ayrıştırılır"
+                  : "Girdiğiniz tutar KDV hariçtir — üzerine KDV eklenerek toplam bulunur"
             }
           >
             <Input

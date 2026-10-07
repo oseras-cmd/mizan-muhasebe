@@ -1,4 +1,4 @@
-import { formatInputValue, parseTurkishNumber } from "@/lib/finance/format";
+import { formatNumberInput, parseTurkishNumber } from "@/lib/finance/format";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
@@ -160,16 +160,16 @@ export function HarcirahHesap() {
                       </Field>
                     )}
                     <Field label="Ödenen Gündelik (₺/gün)">
-                      <Input type="text" inputMode="decimal" value={formatInputValue(String(p.gundelikOdenen))} onChange={(e) => update(p.id, { gundelikOdenen: parseTurkishNumber(e.target.value) || 0 })} className="tabular-nums" />
+                      <Input type="text" inputMode="decimal" value={formatNumberInput(p.gundelikOdenen)} onChange={(e) => update(p.id, { gundelikOdenen: parseTurkishNumber(e.target.value) || 0 })} className="tabular-nums" />
                     </Field>
                     <Field label="Gece Sayısı">
                       <Input type="text" inputMode="numeric" value={String(p.geceSayisi)} onChange={(e) => update(p.id, { geceSayisi: Math.max(1, parseInt(e.target.value) || 1) })} className="tabular-nums" />
                     </Field>
                     <Field label="Konaklama Bedeli (₺, toplam)">
-                      <Input type="text" inputMode="decimal" value={formatInputValue(String(p.konaklama))} onChange={(e) => update(p.id, { konaklama: parseTurkishNumber(e.target.value) || 0 })} className="tabular-nums" />
+                      <Input type="text" inputMode="decimal" value={formatNumberInput(p.konaklama)} onChange={(e) => update(p.id, { konaklama: parseTurkishNumber(e.target.value) || 0 })} className="tabular-nums" />
                     </Field>
                     <Field label="Ulaşım Bedeli (₺, toplam)">
-                      <Input type="text" inputMode="decimal" value={formatInputValue(String(p.ulasim))} onChange={(e) => update(p.id, { ulasim: parseTurkishNumber(e.target.value) || 0 })} className="tabular-nums" />
+                      <Input type="text" inputMode="decimal" value={formatNumberInput(p.ulasim)} onChange={(e) => update(p.id, { ulasim: parseTurkishNumber(e.target.value) || 0 })} className="tabular-nums" />
                     </Field>
                   </div>
                   {r && (

@@ -43,6 +43,8 @@ export interface Transaction {
   documentId?: string;
   /** Şirket etiketi (Ferla/Meskur vb., opsiyonel) */
   company?: string;
+  /** Proje/etiket (opsiyonel — projeye göre gruplama ve filtreleme) */
+  proje?: string;
 }
 
 export type RecurringType = "yok" | "gunluk" | "haftalik" | "aylik" | "yillik";
@@ -310,6 +312,24 @@ export interface BelgeOkuma {
   guven: number;
   /** Modelin notu / belirsiz kalan noktalar */
   not: string;
+  /** Yapay zekânın önerdiği gelir/gider kategorisi (geçerli TRANSACTION_CATEGORIES elemanı) */
+  kategori?: TransactionCategory;
+  /** Belgeden çıkarılan satır kalemleri (fatura kalemleri) */
+  kalemler?: BelgeKalem[];
+}
+
+/** Belgeden çıkarılan tek bir satır kalemi (TaxHacker tarzı kalem ayrıştırma) */
+export interface BelgeKalem {
+  /** Kalem adı / açıklama */
+  ad: string;
+  /** Miktar (1 varsayılan) */
+  miktar: number;
+  /** Birim fiyat */
+  birimFiyat: number;
+  /** KDV oranı (%) */
+  kdvOrani: number;
+  /** KDV dahil toplam */
+  toplam: number;
 }
 
 /** Belge okuma taslağının durumu — onaylanmadan kayıt kesinleşmez */

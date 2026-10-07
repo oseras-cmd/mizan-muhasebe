@@ -1,4 +1,4 @@
-import { formatInputValue, parseTurkishNumber, todayIso } from "@/lib/finance/format";
+import { formatInputValue, formatNumberInput, parseTurkishNumber, todayIso } from "@/lib/finance/format";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
@@ -290,7 +290,7 @@ export function IbkbHesap() {
                         </Select>
                       </td>
                       <td className="px-2 py-2 text-right">
-                        <Input className="h-8 w-28 text-right tabular-nums" type="text" inputMode="decimal" value={s.tutar ? formatInputValue(String(s.tutar)) : ""} onChange={(e) => updateSatir(s.id, { tutar: parseTurkishNumber(e.target.value) || 0 })} />
+                        <Input className="h-8 w-28 text-right tabular-nums" type="text" inputMode="decimal" value={s.tutar ? formatNumberInput(s.tutar) : ""} onChange={(e) => updateSatir(s.id, { tutar: parseTurkishNumber(e.target.value) || 0 })} />
                       </td>
                       <td className="px-2 py-2 text-right tabular-nums">{s.kur != null ? s.kur.toLocaleString("tr-TR", { maximumFractionDigits: 4 }) : "—"}</td>
                       <td className="px-2 py-2 text-right tabular-nums">{fmt(s.tl)}</td>

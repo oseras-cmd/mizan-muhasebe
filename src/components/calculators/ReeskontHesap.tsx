@@ -1,4 +1,4 @@
-import { formatInputValue, parseTurkishNumber, todayIso } from "@/lib/finance/format";
+import { formatInputValue, formatNumberInput, parseTurkishNumber, todayIso } from "@/lib/finance/format";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
@@ -173,7 +173,7 @@ export function ReeskontHesap() {
                           <Input
                             type="text" inputMode="decimal"
                             className="h-8 w-32 text-right tabular-nums"
-                            value={senet?.tutar ? formatInputValue(String(senet.tutar)) : ""}
+                            value={senet?.tutar ? formatNumberInput(senet.tutar) : ""}
                             onChange={(e) => setSenetler((l) => l.map((x) => (x.id === s.id ? { ...x, tutar: parseTurkishNumber(e.target.value) || 0 } : x)))}
                           />
                         </td>

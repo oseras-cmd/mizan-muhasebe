@@ -1,4 +1,4 @@
-import { formatInputValue, parseTurkishNumber } from "@/lib/finance/format";
+import { formatNumberInput, parseTurkishNumber } from "@/lib/finance/format";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
@@ -179,7 +179,7 @@ export function EnflasyonHesap() {
                           </div>
                         </Field>
                         <Field label="Defter Değeri (₺)">
-                          <Input className="h-8 text-right tabular-nums" type="text" inputMode="decimal" value={k.defterDegeri ? formatInputValue(String(k.defterDegeri)) : ""} onChange={(e) => update(k.id, { defterDegeri: parseTurkishNumber(e.target.value) || 0 })} placeholder="0,00" />
+                          <Input className="h-8 text-right tabular-nums" type="text" inputMode="decimal" value={k.defterDegeri ? formatNumberInput(k.defterDegeri) : ""} onChange={(e) => update(k.id, { defterDegeri: parseTurkishNumber(e.target.value) || 0 })} placeholder="0,00" />
                         </Field>
                         <div className="text-xs tabular-nums text-muted-foreground sm:pb-1">
                           <div>Endeks: {satir && satir.edinmeEndeksi > 0 ? satir.edinmeEndeksi.toLocaleString("tr-TR") : "YOK"}</div>

@@ -1,4 +1,4 @@
-import { formatInputValue, parseTurkishNumber, todayIso } from "@/lib/finance/format";
+import { formatNumberInput, parseTurkishNumber, todayIso } from "@/lib/finance/format";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
@@ -233,21 +233,21 @@ export function AdatHesap() {
             <Field label="Azami (Adat Hariç) Tutar" hint="Bu tutara kadar ki bakiye faiz işlemez">
               <Input
                 type="text" inputMode="decimal" className="tabular-nums"
-                value={azamiTutar ? formatInputValue(String(azamiTutar)) : ""}
+                value={azamiTutar ? formatNumberInput(azamiTutar) : ""}
                 onChange={(e) => setAzamiTutar(parseTurkishNumber(e.target.value) || 0)}
               />
             </Field>
             <Field label="Açılış Bakiyesi" hint="Cari hesapta önceki dönem bakiyesi">
               <Input
                 type="text" inputMode="decimal" className="tabular-nums"
-                value={acilisBakiyesi ? formatInputValue(String(acilisBakiyesi)) : ""}
+                value={acilisBakiyesi ? formatNumberInput(acilisBakiyesi) : ""}
                 onChange={(e) => setAcilisBakiyesi(parseTurkishNumber(e.target.value) || 0)}
               />
             </Field>
             <Field label="KDV Oranı (%)">
               <Input
                 type="text" inputMode="decimal" className="tabular-nums"
-                value={kdvOrani ? formatInputValue(String(kdvOrani)) : ""}
+                value={kdvOrani ? formatNumberInput(kdvOrani) : ""}
                 onChange={(e) => setKdvOrani(parseTurkishNumber(e.target.value) || 0)}
               />
             </Field>
@@ -346,14 +346,14 @@ export function AdatHesap() {
                         <td className="px-2 py-1.5 text-right">
                           <Input
                             type="text" inputMode="decimal" className="h-8 w-28 text-right tabular-nums"
-                            value={i.borc ? formatInputValue(String(i.borc)) : ""}
+                            value={i.borc ? formatNumberInput(i.borc) : ""}
                             onChange={(e) => update(i.id, { borc: parseTurkishNumber(e.target.value) || 0 })}
                           />
                         </td>
                         <td className="px-2 py-1.5 text-right">
                           <Input
                             type="text" inputMode="decimal" className="h-8 w-28 text-right tabular-nums"
-                            value={i.alacak ? formatInputValue(String(i.alacak)) : ""}
+                            value={i.alacak ? formatNumberInput(i.alacak) : ""}
                             onChange={(e) => update(i.id, { alacak: parseTurkishNumber(e.target.value) || 0 })}
                           />
                         </td>

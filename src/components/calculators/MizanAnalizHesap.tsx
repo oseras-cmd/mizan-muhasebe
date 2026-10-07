@@ -1,4 +1,4 @@
-import { formatInputValue, parseTurkishNumber } from "@/lib/finance/format";
+import { formatNumberInput, parseTurkishNumber } from "@/lib/finance/format";
 import { useFinanceData } from "@/lib/finance/store";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -296,7 +296,7 @@ export function MizanAnalizHesap() {
                           <td key={key} className="px-2 py-1.5 text-right">
                             <Input
                               className="h-8 w-28 text-right tabular-nums" type="text" inputMode="decimal"
-                              value={r[key] ? formatInputValue(String(r[key])) : ""}
+                              value={r[key] ? formatNumberInput(r[key]) : ""}
                               placeholder={ph}
                               onChange={(e) => update(i, { [key]: parseTurkishNumber(e.target.value) || 0 } as Partial<MizanSatir>)}
                             />

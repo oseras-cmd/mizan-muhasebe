@@ -31,9 +31,10 @@ import {
   type UpdateInfo,
   openUpdateDownload,
 } from "@/lib/finance/updater";
+import { getPromptEk, setPromptEk } from "@/lib/finance/docReader";
+import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { setTheme as setAppTheme } from "@/lib/finance/theme";
-import type { Product } from "@/lib/finance/types";
 import {
   CheckCircle2,
   Clock,
@@ -47,6 +48,7 @@ import {
   RotateCcw,
   Save,
   Shield,
+  Sparkles,
   Sun,
   Trash2,
   Upload,
@@ -72,6 +74,12 @@ export default function Ayarlar() {
   const [purging, setPurging] = useState(false);
   const [migrating, setMigrating] = useState(false);
   const [confirmingBackupDelete, setConfirmingBackupDelete] = useState(false);
+  const [aiPromptEk, setAiPromptEk] = useState(() => getPromptEk());
+
+  const handleSaveAiPrompt = () => {
+    setPromptEk(aiPromptEk);
+    toast.success("Yapay zekâ talimatları kaydedildi.");
+  };
   const [isDarkTheme, setIsDarkTheme] = useState(() => {
     try { return document.documentElement.classList.contains("dark"); } catch { return false; }
   });
@@ -517,6 +525,57 @@ export default function Ayarlar() {
               Sürüm bilgisi henüz kontrol edilmedi. Otomatik kontrol günde bir kez yapılır.
             </p>
           )}
+        </section>
+
+        {/* Yapay Zekâ — özelleştirilebilir prompt */}
+        <section className="mt-6 rounded-lg border bg-card">
+          <header className="flex items-center gap-3 border-b border-border/70 px-5 py-4">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-border bg-background">
+              <Sparkles className="size-4 text-muted-foreground" />
+            </div>
+            <div className="flex-1">
+              <h2 className="text-sm font-semibold text-foreground">
+                Yapay Zekâ Ayarları
+              </h2>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                Belge okumayı yönlendiren ek talimatlar — API anahtarı Belgeler
+                sayfasında girilir
+              </p>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleSaveAiPrompt}
+            >
+              <Save className="mr-2 size-3.5" />
+              Kaydet
+            </Button>
+          </header>
+          <div className="px-5 py-4">
+            <label
+              htmlFor="ai-prompt-ek"
+              className="text-xs font-medium text-muted-foreground"
+            >
+              Ek talimatlar
+            </label>
+            <Textarea
+              id="ai-prompt-ek"
+              value={aiPromptEk}
+              onChange={(event) => setAiPromptEk(event.target.value)}
+              rows={5}
+              className="mt-1.5 resize-y font-mono text-sm"
+              placeholder={
+                "Örnek: Gıda alışverişi fişlerinde kategori olarak \"Malzeme\" öner.\nÖrnek: KDV oranı belgeden açıkça okunmazsa tahmin etme, %0 yaz."
+              }
+            />
+            <p className="mt-2 text-[11px] leading-4 text-muted-foreground">
+              Talimatlar belge okuma prompt'unun sonuna eklenir; JSON alan
+              şemasını değiştirmez — yalnızca çıkarımı (kategori önerisi, fatura
+              kalemleri, tarih, güven skoru) yönlendirir. Alanı boşaltıp
+              kaydederek varsayılana dönebilirsiniz.
+            </p>
+          </div>
         </section>
 
         {/* Tema */}

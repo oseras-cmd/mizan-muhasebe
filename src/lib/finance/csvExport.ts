@@ -74,11 +74,29 @@ export function exportTodosCSV(
 
 /* ---- İşlemler ---- */
 export function exportTransactionsCSV(
-  transactions: { type: string; description: string; category: string; amount: number; date: string }[],
+  transactions: {
+    type: string;
+    description: string;
+    category: string;
+    amount: number;
+    date: string;
+    proje?: string;
+    accountName?: string;
+    company?: string;
+  }[],
 ) {
-  const header = toCSVRow(["Tür", "Açıklama", "Kategori", "Tutar", "Tarih"]);
+  const header = toCSVRow(["Tür", "Tarih", "Açıklama", "Kategori", "Proje", "Hesap", "Şirket", "Tutar"]);
   const rows = transactions.map((t) =>
-    toCSVRow([t.type === "gelir" ? "Gelir" : "Gider", t.description, t.category, formatTRY(t.amount), t.date]),
+    toCSVRow([
+      t.type === "gelir" ? "Gelir" : "Gider",
+      t.date,
+      t.description,
+      t.category,
+      t.proje ?? "",
+      t.accountName ?? "",
+      t.company ?? "",
+      formatTRY(t.amount),
+    ]),
   );
   downloadCSV([header, ...rows].join("\n"), `mizan-islemler-${todayIso()}.csv`);
 }

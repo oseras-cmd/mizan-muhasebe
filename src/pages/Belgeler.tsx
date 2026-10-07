@@ -5,6 +5,7 @@ import { Label } from "@/components/ui/label";
 import {
   formatFullDate,
   formatInputValue,
+  formatNumberInput,
   formatTRY,
   parseTurkishNumber,
   todayIso,
@@ -28,6 +29,7 @@ import {
   BELGE_TURLERI,
   DOCUMENT_CATEGORIES,
   KDV_RATES,
+  TRANSACTION_CATEGORIES,
   type BelgeOkuma,
   type BelgeTuru,
   type DocumentCategory,
@@ -95,6 +97,10 @@ interface OkumaForm {
   kdvTutar: string;
   toplamTutar: string;
   hesapId: string;
+  /** Onayda kullanılacak gelir/gider kategorisi (AI önerisiyle dolu gelebilir) */
+  kategori: TransactionCategory;
+  /** Onayda işleme atanacak proje/etiket */
+  proje: string;
 }
 
 const bosOkumaForm: OkumaForm = {
@@ -109,6 +115,8 @@ const bosOkumaForm: OkumaForm = {
   kdvTutar: "",
   toplamTutar: "",
   hesapId: "",
+  kategori: "Diğer",
+  proje: "",
 };
 
 /** Dosyayı data URL'e çevirir; büyük dosyalarda arayüzü bloklamaz. */
@@ -162,6 +170,8 @@ export default function Belgeler() {
   const [okuSonra, setOkuSonra] = useState(true);
   const [dupeOnay, setDupeOnay] = useState(false);
   const [oForm, setOForm] = useState<OkumaForm>(bosOkumaForm);
+  /** Satır kalemi seçim durumu — null = tümü seçili */
+  const [kalemSecim, setKalemSecim] = useState<boolean[] | null>(null);
 
   // Önizleme modalı
   const [previewDoc, setPreviewDoc] = useState<StoredDocument | null>(null);
@@ -271,7 +281,7 @@ export default function Belgeler() {
     "flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-ring/40";
 
   /** Sayıyı TR biçiminde forma yazar (1234,56 → 1.234,56). */
-  const formatSayi = (v: number) => formatInputValue(String(v).replace(/\./g, ","));
+  const formatSayi = (v: number) => formatNumberInput(v);
 
   const okumaFormuDoldur = (okuma: BelgeOkuma, doc: StoredDocument): OkumaForm => {
     // Model %1/%10/%20 dışındaki oran söyleyebilir — en yakın resmî orana yuvarla
@@ -290,16 +300,23 @@ export default function Belgeler() {
       belgeTuru: okuma.belgeTuru,
       yon: okuma.yon === "belirsiz" ? "" : okuma.yon,
       matrah: okuma.matrah
-        ? formatInputValue(String(okuma.matrah).replace(/\./g, ","))
+        ? formatNumberInput(okuma.matrah)
         : "",
       kdvOrani: String(enYakinOran),
       kdvTutar: okuma.kdvTutar
-        ? formatInputValue(String(okuma.kdvTutar).replace(/\./g, ","))
+        ? formatNumberInput(okuma.kdvTutar)
         : "",
       toplamTutar: okuma.toplamTutar
-        ? formatInputValue(String(okuma.toplamTutar).replace(/\./g, ","))
+        ? formatNumberInput(okuma.toplamTutar)
         : "",
       hesapId: data.accounts[0]?.id ?? "",
+      // AI kategorisi varsa onu kullan; yoksa yön+türden heuristik öner
+      kategori:
+        okuma.kategori ??
+        (okuma.yon === "belirsiz"
+          ? "Diğer"
+          : kategoriBul(okuma.yon, okuma.belgeTuru)),
+      proje: "",
     };
   };
 
@@ -319,6 +336,7 @@ export default function Belgeler() {
       setDocumentOkuma(doc.id, okuma);
       setOForm(okumaFormuDoldur(okuma, doc));
       setDupeOnay(false);
+      setKalemSecim(null);
       setOkumaMod("taslak");
       setOkumaDoc(doc);
       toast.success("Belge okundu. Bilgileri kontrol edip onaylayın.");
@@ -333,6 +351,7 @@ export default function Belgeler() {
     if (doc.okuma) {
       setOForm(okumaFormuDoldur(doc.okuma, doc));
       setDupeOnay(false);
+      setKalemSecim(null);
       setOkumaMod("taslak");
       setOkumaDoc(doc);
       return;
@@ -379,6 +398,10 @@ export default function Belgeler() {
   const oOran = parseTurkishNumber(oForm.kdvOrani) || 0;
   const durum = okumaModalDoc?.okumaDurum ?? "taslak";
   const guven = okumaModalDoc?.okuma?.guven ?? null;
+  const oKalemler = okumaModalDoc?.okuma?.kalemler ?? [];
+  const oKalemSecim = kalemSecim ?? oKalemler.map(() => true);
+  const oSeciliKalemSayisi = oKalemler.filter((_, i) => oKalemSecim[i]).length;
+  const oKalemToplam = oKalemler.reduce((a, k) => a + k.toplam, 0);
   const oFaturaUygun =
     oForm.belgeTuru === "fatura" &&
     oMatrah > 0 &&
@@ -447,15 +470,56 @@ export default function Belgeler() {
     addTransaction({
       type: oForm.yon,
       description: aciklama,
-      category: kategoriBul(oForm.yon, oForm.belgeTuru),
+      category: oForm.kategori,
       accountId: oForm.hesapId,
       amount: oToplam,
       date: tarih,
       documentId: doc.id,
+      proje: oForm.proje.trim() || undefined,
     });
     setDocumentOkumaDurum(doc.id, "onayli");
     setOkumaDoc(null);
     toast.success("Onaylandı — finansal kayıt oluşturuldu.");
+  };
+
+  /** Seçilen satır kalemlerini tek tek ayrı gelir/gider kayıtlarına böler. */
+  const kalemleriBol = () => {
+    const doc = okumaModalDoc;
+    if (!doc) return;
+    if (!oForm.yon) {
+      toast.error("Belge yönünü seçin (gelir / gider).");
+      return;
+    }
+    if (!oForm.hesapId) {
+      toast.error("Kasa/banka hesabı seçin.");
+      return;
+    }
+    const kalemler = doc.okuma?.kalemler ?? [];
+    const secim = kalemSecim ?? kalemler.map(() => true);
+    const secili = kalemler.filter((_, i) => secim[i]);
+    if (secili.length === 0) {
+      toast.error("En az bir kalem seçin.");
+      return;
+    }
+    if (!onayBasla()) return;
+    const tarih = oForm.tarih || todayIso();
+    const cari = oForm.cariUnvan.trim();
+    const proje = oForm.proje.trim();
+    for (const k of secili) {
+      addTransaction({
+        type: oForm.yon,
+        description: [k.ad, cari ? `— ${cari}` : ""].filter(Boolean).join(" "),
+        category: oForm.kategori,
+        accountId: oForm.hesapId,
+        amount: k.toplam,
+        date: tarih,
+        documentId: doc.id,
+        proje: proje || undefined,
+      });
+    }
+    setDocumentOkumaDurum(doc.id, "onayli");
+    setOkumaDoc(null);
+    toast.success(`${secili.length} kalem ayrı işlemlere bölündü — toplam ${formatTRY(secili.reduce((a, k) => a + k.toplam, 0))}.`);
   };
 
   const onaylaFatura = () => {
@@ -1311,6 +1375,27 @@ export default function Belgeler() {
                     </select>
                   </div>
                   <div className="space-y-1.5">
+                    <Label>Kategori</Label>
+                    <select
+                      value={oForm.kategori}
+                      onChange={(e) =>
+                        oAlanSet({
+                          kategori: e.target.value as TransactionCategory,
+                        })
+                      }
+                      className={selectSinif}
+                    >
+                      {TRANSACTION_CATEGORIES.map((c) => (
+                        <option key={c} value={c}>
+                          {c}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="text-[11px] text-muted-foreground">
+                      AI önerisiyle dolduruldu — gerekirse değiştirin
+                    </p>
+                  </div>
+                  <div className="space-y-1.5">
                     <Label>Tarih</Label>
                     <Input
                       type="date"
@@ -1404,7 +1489,92 @@ export default function Belgeler() {
                       ))}
                     </select>
                   </div>
+                  <div className="space-y-1.5 sm:col-span-2">
+                    <Label>Proje / Etiket</Label>
+                    <Input
+                      list="proje-okuma-listesi"
+                      value={oForm.proje}
+                      placeholder="Opsiyonel — kaydı bir projeye bağlar (yeni yazabilirsiniz)"
+                      onChange={(e) => oAlanSet({ proje: e.target.value })}
+                    />
+                    <datalist id="proje-okuma-listesi">
+                      {Array.from(
+                        new Set(
+                          data.transactions
+                            .map((t) => t.proje)
+                            .filter((p): p is string => !!p),
+                        ),
+                      ).map((p) => (
+                        <option key={p} value={p} />
+                      ))}
+                    </datalist>
+                  </div>
                 </div>
+
+                {durum !== "onayli" && oKalemler.length > 0 && (
+                  <div className="rounded-lg border border-border/70 bg-muted/30 p-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-xs font-semibold text-foreground">
+                        Fatura Kalemleri ({oKalemler.length})
+                      </p>
+                      <span className="text-[11px] text-muted-foreground">
+                        Seçilenler ayrı işlem olarak bölünür · Toplam {formatTRY(oKalemToplam)}
+                      </span>
+                    </div>
+                    <ul className="mt-2 max-h-44 divide-y divide-border/60 overflow-y-auto rounded-md border bg-background">
+                      {oKalemler.map((k, i) => (
+                        <li key={`${k.ad}-${i}`} className="flex items-center gap-2.5 px-3 py-2">
+                          <input
+                            type="checkbox"
+                            checked={oKalemSecim[i] ?? true}
+                            onChange={(e) =>
+                              setKalemSecim((prev) => {
+                                const base = prev ?? oKalemler.map(() => true);
+                                const next = [...base];
+                                next[i] = e.target.checked;
+                                return next;
+                              })
+                            }
+                            className="size-4 accent-primary"
+                          />
+                          <span className="min-w-0 flex-1 truncate text-xs text-foreground">
+                            {k.ad}
+                          </span>
+                          <span className="hidden shrink-0 text-[11px] tabular-nums text-muted-foreground sm:inline">
+                            {k.miktar} × {formatTRY(k.birimFiyat)} · %{k.kdvOrani}
+                          </span>
+                          <span className="w-24 shrink-0 text-right font-mono text-xs tabular-nums text-foreground">
+                            {formatTRY(k.toplam)}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                    <div className="mt-2 flex items-center justify-between gap-2">
+                      <button
+                        type="button"
+                        className="text-[11px] text-muted-foreground underline underline-offset-2 hover:text-foreground"
+                        onClick={() => setKalemSecim(oKalemler.map(() => false))}
+                      >
+                        Tümünü kaldır
+                      </button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={
+                          oSeciliKalemSayisi === 0 || !oForm.yon || !oForm.hesapId
+                        }
+                        onClick={kalemleriBol}
+                      >
+                        Seçilen {oSeciliKalemSayisi} kalemi işle böle
+                      </Button>
+                    </div>
+                    {!oForm.yon || !oForm.hesapId ? (
+                      <p className="mt-1.5 text-[11px] text-amber-700 dark:text-amber-400">
+                        Bölme için önce yön ve hesap seçin.
+                      </p>
+                    ) : null}
+                  </div>
+                )}
 
                 {!oForm.yon && (
                   <p className="text-xs text-amber-700 dark:text-amber-400">
