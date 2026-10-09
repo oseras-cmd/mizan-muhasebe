@@ -10,6 +10,7 @@ import { GelirVergisiDilimHesap } from "@/components/calculators/GelirVergisiDil
 import { MaliyetHesap } from "@/components/calculators/MaliyetHesap";
 import { TiftikMaliyet } from "@/components/calculators/TiftikMaliyet";
 import { MesaiHesap } from "@/components/calculators/MesaiHesap";
+import { MaasHesap } from "@/components/calculators/MaasHesap";
 import { MasrafHesap } from "@/components/calculators/MasrafHesap";
 import { KdvBeyannameHesap } from "@/components/calculators/KdvBeyannameHesap";
 import { DamgaVergisiHesap } from "@/components/calculators/DamgaVergisiHesap";
@@ -84,6 +85,7 @@ const TABS = [
   { id: "binek", label: "Binek Oto Kısıtlama", icon: Car },
   { id: "maliyet", label: "Maliyet", icon: Boxes },
   { id: "tiftik", label: "Tiftik Maliyet", icon: Layers },
+  { id: "maas", label: "Maaş Hesapla", icon: Wallet },
   { id: "mesai", label: "Mesai", icon: Clock },
   { id: "masraf", label: "Masraf Listesi", icon: ReceiptText },
   { id: "kidem", label: "Kıdem & İhbar", icon: UserRound },
@@ -105,7 +107,7 @@ const TAB_GROUPS: { label: string; ids: TabId[] }[] = [
   { label: "Kur & Döviz", ids: ["kur", "kurfarki", "ibkb"] },
   { label: "KDV & Belgeler", ids: ["kdv", "kdvbeyanname", "tevkifat", "smm", "giderpusulasi"] },
   { label: "Vergi Hesapları", ids: ["stopaj", "gvDilim", "damga", "finansman", "binek"] },
-  { label: "Bordro & Personel", ids: ["mesai", "kidem", "giriscikis", "harcirah"] },
+  { label: "Bordro & Personel", ids: ["maas", "mesai", "kidem", "giriscikis", "harcirah"] },
   { label: "Maliyet & Varlıklar", ids: ["maliyet", "tiftik", "masraf", "police", "amortisman", "reeskont", "adat", "enflasyon"] },
   { label: "Analiz & Takip", ids: ["mizan", "edefter", "mukellef", "takvim"] },
 ];
@@ -262,6 +264,7 @@ export default function Hesaplayicilar() {
           {active === "tiftik" && (
             <TiftikMaliyet usdRate={snapshot?.rates.USD ?? null} />
           )}
+          {active === "maas" && <MaasHesap />}
           {active === "mesai" && <MesaiHesap />}
           {active === "masraf" && <MasrafHesap />}
           {active === "kidem" && <KidemIhbarHesap />}
