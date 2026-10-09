@@ -1,3 +1,58 @@
+import { useSyncExternalStore } from "react";
+
+export type PolicyType = "Binek Araç" | "Ticari Araç" | "İşyeri Poliçesi";
+
+export interface SavedPolicy {
+  id: number;
+  type: string;
+  account: string;
+  number: string;
+  date: string;
+  amount: number;
+  savedAt: string;
+}
+
+export interface PolicyMonthRow {
+  year: number;
+  monthIndex: number;
+  monthName: string;
+  days: number;
+  amount: number;
+  quarter: number;
+  periodLabel: string;
+  accountCode: string;
+}
+
+export interface PolicySchedule {
+  rows: PolicyMonthRow[];
+  kkegAmount: number;
+  totals: Record<string, number>;
+}
+
+const MONTH_NAMES = [
+  "Ocak",
+  "Şubat",
+  "Mart",
+  "Nisan",
+  "Mayıs",
+  "Haziran",
+  "Temmuz",
+  "Ağustos",
+  "Eylül",
+  "Ekim",
+  "Kasım",
+  "Aralık",
+];
+
+/**
+ * Yıllık poliçe tutarını aylara ve muhasebe hesaplarına dağıtır:
+ * ilk ay seçilen gider hesabına (770/730/740/760), yıl içi 180'e,
+ * yıl dönümünde (Ocak) 280'e yazılır. Binek araçta %30 K.K.E.G. (689) ayrılır.
+ *
+ * Gün bazlı dağılımda ilk ay başlangıç gününden ay sonuna, aradaki aylar
+ * takvim ayının tamamına karşılık gelir; son ay 365 güne tamamlanır
+ * (takvim ayını aşmaz).
+ */
 export function computePolicySchedule(input: {
   type: string;
   account: string;
@@ -65,4 +120,84 @@ export function computePolicySchedule(input: {
   }
 
   return { rows, kkegAmount, totals };
+}
+
+/* ------------------------- Kayıtlı poliçeler (localStorage) ------------------------- */
+
+const STORAGE_KEY = "denge-saved-policies-v1";
+
+function loadPolicies(): SavedPolicy[] {
+  try {
+    const raw = window.localStorage.getItem(STORAGE_KEY);
+    if (!raw) return [];
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(
+      (p): p is SavedPolicy =>
+        typeof p === "object" &&
+        p !== null &&
+        typeof (p as SavedPolicy).number === "string" &&
+        typeof (p as SavedPolicy).amount === "number",
+    );
+  } catch {
+    return [];
+  }
+}
+
+let policies: SavedPolicy[] = loadPolicies();
+const listeners = new Set<() => void>();
+
+function subscribe(listener: () => void): () => void {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
+}
+
+function emit() {
+  for (const listener of listeners) listener();
+}
+
+function persist() {
+  try {
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(policies));
+  } catch {
+    // Depolama dolu ya da erişilemezse sessizce devam et.
+  }
+}
+
+export function getSavedPolicies(): SavedPolicy[] {
+  return policies;
+}
+
+export function useSavedPolicies(): SavedPolicy[] {
+  return useSyncExternalStore(subscribe, getSavedPolicies);
+}
+
+export function savePolicy(input: {
+  type: string;
+  account: string;
+  number: string;
+  date: string;
+  amount: number;
+}): SavedPolicy {
+  const policy: SavedPolicy = {
+    id: Date.now() + Math.floor(Math.random() * 1000),
+    type: input.type,
+    account: input.account,
+    number: input.number.trim(),
+    date: input.date,
+    amount: input.amount,
+    savedAt: new Date().toLocaleString("tr-TR"),
+  };
+  policies = [policy, ...policies];
+  persist();
+  emit();
+  return policy;
+}
+
+export function deleteSavedPolicy(id: number) {
+  policies = policies.filter((p) => p.id !== id);
+  persist();
+  emit();
 }

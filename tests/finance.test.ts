@@ -100,7 +100,6 @@ describe("Gelir/Gider kayıtları", () => {
 
 describe("Fatura numaralandırma ve KDV", () => {
   test("müşteriye satış (FT), tedarikçiye alış (AL) serisi verilir", () => {
-    const data = getFinanceData();
     const year = new Date().getFullYear();
     const items = [
       {
@@ -330,10 +329,11 @@ describe("Rapor yardımcıları", () => {
 
 describe("Poliçe gider dağılımı", () => {
   test("binek araçta %30 K.K.E.G. ayrılır ve toplam korunur", () => {
+    // Ayın 1'inde başlayan poliçede 12 ay 365 günü tamamlar ve toplam korunur
     const schedule = computePolicySchedule({
       type: "Binek Araç",
       account: "770",
-      startDate: "2026-02-15",
+      startDate: "2026-02-01",
       amount: 25000,
     });
 
@@ -356,6 +356,24 @@ describe("Poliçe gider dağılımı", () => {
       (schedule.totals["280"] ?? 0) +
       schedule.totals["kkeg"];
     expect(totalsTotal).toBeCloseTo(25000, 2);
+  });
+
+  test("ay ortasında başlayan poliçede son ay 365 günle sınırlanır", () => {
+    const schedule = computePolicySchedule({
+      type: "Binek Araç",
+      account: "770",
+      startDate: "2026-02-15",
+      amount: 26000,
+    });
+    // 15-28 Şubat (14 gün) + Mart-Aralık (306 gün) + Ocak (min(31, 45) = 31) = 351 gün
+    const totalDays = schedule.rows.reduce((sum, r) => sum + r.days, 0);
+    expect(totalDays).toBe(351);
+    expect(schedule.rows[11].days).toBe(31);
+    // İlk ay giderin başladığı günden itibaren dağıtılır
+    expect(schedule.rows[0].days).toBe(14);
+    const monthsTotal = schedule.rows.reduce((sum, r) => sum + r.amount, 0);
+    // Aylık tutarlar = (tutar − K.K.E.G.) / 365 × 351 gün; K.K.E.G. ayrıca 689'a ayrılır
+    expect(monthsTotal + schedule.kkegAmount).toBeCloseTo(7800 + 18200 * (351 / 365), 2);
   });
 
   test("ticari araçta K.K.E.G. ayrılmaz", () => {
@@ -408,10 +426,8 @@ describe("Tiftik maliyet hesabı", () => {
     bozMalKg: 0,
     yikamaUcreti: 30,
     genelGiderler: 0,
-    isciSayisi: 5,
-    isciMaas: 32000,
-    aySayisi: 4,
     satisUsd: 18,
+    ekMaliyetler: [],
   };
 
   test("fire akışı ve maliyet kalemleri örnekteki değerlerle örtüşür", () => {
@@ -422,9 +438,9 @@ describe("Tiftik maliyet hesabı", () => {
     expect(r.netKg).toBeCloseTo(7413.12, 2);
     expect(r.hamAlim).toBeCloseTo(5491200, 2);
     expect(r.yikamaUcretiToplam).toBeCloseTo(343200, 2);
-    expect(r.iscilik).toBeCloseTo(640000, 2);
-    expect(r.toplamMaliyet).toBeCloseTo(6474400, 2);
-    expect(r.birimMaliyet).toBeCloseTo(6474400 / 7413.12, 2);
+    // İşçilik ücrete dahil değil; toplam = ham alım + yıkama ücreti + genel gider + ek maliyetler
+    expect(r.toplamMaliyet).toBeCloseTo(5834400, 2);
+    expect(r.birimMaliyet).toBeCloseTo(5834400 / 7413.12, 2);
   });
 
   test("boz mal çıkınca net kg düşer ve birim maliyet yükselir", () => {
@@ -442,9 +458,9 @@ describe("Tiftik maliyet hesabı", () => {
     expect(r.kiloBasiKar).toBeCloseTo(864 - r.birimMaliyet!, 2);
     expect(r.karMarjiPct).toBeCloseTo((r.brutKar! / r.toplamGelir!) * 100, 2);
     expect(r.basabasUsd).toBeCloseTo(r.birimMaliyet! / 48, 2);
-    // 6.474.400 ÷ 7.413,12 ≈ 873,37 TL/kg → başabaş ≈ 18,20 USD/kg (> 18 satış)
-    expect(r.basabasUsd!).toBeGreaterThan(18);
-    expect(r.kiloBasiKar!).toBeLessThan(0);
+    // 5.834.400 ÷ 7.413,12 ≈ 787,03 TL/kg → başabaş ≈ 16,40 USD/kg (< 18 USD satış)
+    expect(r.basabasUsd!).toBeLessThan(18);
+    expect(r.kiloBasiKar!).toBeGreaterThan(0);
   });
 
   test("boz mal kg bilinmiyorsa kilo başı maliyet hesaplanamaz", () => {
@@ -454,7 +470,7 @@ describe("Tiftik maliyet hesabı", () => {
     expect(r.toplamGelir).toBeNull();
     expect(r.basabasUsd).toBeNull();
     // maliyet kalemleri yine de hesaplanır
-    expect(r.toplamMaliyet).toBeCloseTo(6474400, 2);
+    expect(r.toplamMaliyet).toBeCloseTo(5834400, 2);
   });
 
   test("net kg sıfıra inerse birim maliyet hesaplanamaz", () => {
@@ -510,7 +526,7 @@ describe("Kur hesaplamaları", () => {
 });
 
 describe("Yedekleme", () => {
-  test("dışa aktarılan yedek geri yüklenebilir", () => {
+  test("dışa aktarılan yedek geri yüklenebilir", async () => {
     const data = getFinanceData();
     addTransaction({
       type: "gelir",
@@ -521,7 +537,7 @@ describe("Yedekleme", () => {
       date: todayIso(),
     });
 
-    const raw = exportFinanceData();
+    const raw = await exportFinanceData();
     const restored = importFinanceData(raw);
     expect(restored).toBe(true);
 
