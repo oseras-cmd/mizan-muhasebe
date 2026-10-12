@@ -246,10 +246,17 @@ function createWindow(baseUrl) {
     win.show();
   });
 
-  // Open external links in system browser
+  // Open external links in system browser — yalnızca http(s) protokolleri
   win.webContents.setWindowOpenHandler(({ url }) => {
-    shell.openExternal(url);
+    if (url.startsWith("https://") || url.startsWith("http://")) {
+      shell.openExternal(url);
+    }
     return { action: "deny" };
+  });
+
+  // Uygulama penceresi yalnızca kendi sunucusunda kalır (dış gezinme engellenir)
+  win.webContents.on("will-navigate", (event, url) => {
+    if (!url.startsWith(baseUrl)) event.preventDefault();
   });
 
   return win;

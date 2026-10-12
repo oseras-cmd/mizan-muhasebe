@@ -31,6 +31,11 @@ import {
   hesaplaMaas,
 } from "../src/components/calculators/engine/maas";
 import {
+  hesaplaKidemIhbar,
+  ihbarSureHafta,
+} from "../src/components/calculators/engine/calcEngine";
+import { kidemTavani } from "../src/components/calculators/engine/params";
+import {
   computePolicySchedule,
   deleteSavedPolicy,
   getSavedPolicies,
@@ -612,5 +617,71 @@ describe("Maaş hesabı (brüt ↔ net, 2026)", () => {
     const geri = hesaplaMaas(brut!, secenek);
     // gerekliBrut 0,5 ₺ toleransla yakınsar
     expect(Math.abs(geri.satirlar[0].net - hedef)).toBeLessThan(0.5);
+  });
+});
+
+describe("Kıdem & ihbar (2026)", () => {
+  test("1 yıl isveren feshi: kıdem 30 günlük, ihbar 4 hafta", () => {
+    const { kidem, ihbar } = hesaplaKidemIhbar({
+      iseGiris: "2025-01-01",
+      istenCikis: "2026-01-01",
+      giydirilmisBrut: 60_000,
+      fesihNedeni: "isverenFeshi",
+    });
+    // 365 gün = 1 tam yıl → 30 günlük ücret; tavan (2.164,96 ₺/gün) aşılmadı
+    expect(kidem!.calismaSuresi.yil).toBe(1);
+    expect(kidem!.brutKidem).toBeCloseTo(60_000, 2);
+    expect(kidem!.damga).toBeCloseTo(60_000 * 0.00759, 2);
+    // İK m.17: 6 ay–1 yıl arası ihbar 4 hafta
+    expect(ihbar!.sureHafta).toBe(4);
+    expect(ihbar!.brutIhbar).toBeCloseTo(2_000 * 4 * 7, 2);
+    expect(ihbar!.hak).toBe(true);
+  });
+
+  test("istifada kıdem ve ihbar yok", () => {
+    const { kidem, ihbar } = hesaplaKidemIhbar({
+      iseGiris: "2024-01-01",
+      istenCikis: "2026-01-01",
+      giydirilmisBrut: 40_000,
+      fesihNedeni: "istifa",
+    });
+    expect(kidem!.hak).toBe(false);
+    expect(kidem!.brutKidem).toBe(0);
+    expect(ihbar!.hak).toBe(false);
+    expect(ihbar!.brutIhbar).toBe(0);
+  });
+
+  test("emeklilik (işçi feshi) ihbar tazminatı doğurmaz", () => {
+    const { ihbar } = hesaplaKidemIhbar({
+      iseGiris: "2020-01-01",
+      istenCikis: "2026-01-01",
+      giydirilmisBrut: 50_000,
+      fesihNedeni: "emeklilik",
+    });
+    expect(ihbar!.hak).toBe(false);
+  });
+
+  test("ihbar süreleri yasal sınırlarda kesin", () => {
+    expect(ihbarSureHafta(100)).toBe(2); // 6 aydan kısa
+    expect(ihbarSureHafta(180)).toBe(2); // 6 ay dâhil
+    expect(ihbarSureHafta(181)).toBe(4); // 6 ay–1 yıl
+    expect(ihbarSureHafta(365)).toBe(4); // 1 yıl dâhil
+    expect(ihbarSureHafta(366)).toBe(6); // 1–5 yıl
+    expect(ihbarSureHafta(1824)).toBe(6);
+    expect(ihbarSureHafta(1825)).toBe(8); // 5 yıldan fazla
+  });
+
+  test("kıdem tavanı fesih tarihine göre seçilir", () => {
+    expect(kidemTavani("2026-03-15")).toBe(64_948.77);
+    expect(kidemTavani("2026-08-15")).toBe(73_729.87);
+    // Tavan aşan ücrette günlük tavanla sınırlı
+    const { kidem } = hesaplaKidemIhbar({
+      iseGiris: "2025-07-01",
+      istenCikis: "2026-07-01",
+      giydirilmisBrut: 200_000,
+      fesihNedeni: "isverenFeshi",
+    });
+    expect(kidem!.tavanAsildi).toBe(true);
+    expect(kidem!.brutKidem).toBeCloseTo(30 * (73_729.87 / 30), 2); // 1 yıl → tam tavan
   });
 });

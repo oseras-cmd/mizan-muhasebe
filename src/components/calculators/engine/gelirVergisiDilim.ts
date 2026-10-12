@@ -225,9 +225,10 @@ export function simuleEt(g: AylikGirdi): AyDetay[] {
     const damga = damgaMatrahi * DAMGA_ORAN;
 
     const net = brüt - sgkIsci - gv - damga;
-    // İşveren maliyeti: brüt + SGK işveren %20,5 (SGK %19,5 + işsizlik %2 — tavanlı) + damga
-    const sgkIsveren = sgkMatrah * 0.215;
-    const isverenMaliyet = brüt + sgkIsveren + damga;
+    // İşveren maliyeti: brüt + işveren SGK %21,75 + işsizlik %2 (2026, tavanlı).
+    // Damga vergisi ücretten kesilir, işverene ek maliyet değildir.
+    const sgkIsveren = sgkMatrah * 0.2375;
+    const isverenMaliyet = brüt + sgkIsveren;
 
     detay.push({
       ay,

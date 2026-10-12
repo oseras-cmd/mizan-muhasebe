@@ -634,11 +634,11 @@ export const FESIH_ADLARI: Record<FesihNedeni, string> = {
   oluyorlar: "",
 };
 
-/** İş Kanunu m.17 ihbar süreleri (hafta). */
+/** İş Kanunu m.17 ihbar süreleri (hafta):
+ *  6 aya kadar (dâhil) 2 hafta · 6 ay–1 yıl 4 hafta · 1–5 yıl 6 hafta · 5 yıldan fazla 8 hafta */
 export function ihbarSureHafta(toplamGun: number): number {
-  if (toplamGun < 180) return 2; // 6 aydan az — süre 2 hafta (tazminat hakkı kıdem koşuluna bağlı)
-  if (toplamGun < 540) return 2;
-  if (toplamGun < 1095) return 4;
+  if (toplamGun <= 180) return 2;
+  if (toplamGun <= 365) return 4;
   if (toplamGun < 1825) return 6;
   return 8;
 }
@@ -691,9 +691,10 @@ export function hesaplaKidemIhbar(input: KidemIhbarInput): { kidem: KidemResult 
     netKidem: brutKidem - damga,
   };
 
-  // İhbar: işçi istifasında ihbar tazminatı yok (işveren feshinde var)
+  // İhbar: yalnızca işveren feshinde işçiye ödenir;
+  // işçinin kendi feshi (istifa, evlenme, askerlik, emeklilik) ihbar tazminatı doğurmaz
   const hafta = ihbarSureHafta(toplamGun);
-  const ihbarHak = input.fesihNedeni === "isverenFeshi" || input.fesihNedeni === "emeklilik";
+  const ihbarHak = input.fesihNedeni === "isverenFeshi";
   const brutIhbar = ihbarHak ? gunlukBrut * hafta * 7 : 0;
   const sgk = brutIhbar * P.SGK_ISCI;
   const issizlik = brutIhbar * P.ISSIZLIK_ISCI;

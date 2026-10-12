@@ -38,7 +38,8 @@ export function GirisCikisHesap() {
   );
 
   const fmt = (v: number) => `${v.toLocaleString("tr-TR", { minimumFractionDigits: 2 })} ₺`;
-  const sgkOran = sgkTesvik ? "%15,5" : "%20,5";
+  const pct = (v: number) => `%${(v * 100).toLocaleString("tr-TR")}`;
+  const sgkOran = pct(sgkTesvik ? PARAMS_2026.SGK_ISVEREN_TESVIK : PARAMS_2026.SGK_ISVEREN);
 
   const excelSections = [
     {
@@ -94,7 +95,7 @@ export function GirisCikisHesap() {
       ],
       notes: [
         "Kıdem tazminatı yalnızca damga vergisine tabidir; ihbar tazminatı ve izin ücreti ücret niteliğindedir.",
-        `Güncel parametreler: kıdem tavanı 2026/2: ${PARAMS_2026.KIDEM_TAVAN_2.toLocaleString("tr-TR")} TL · brüt asgari ücret: ${PARAMS_2026.ASGARI_UCRET_BRUT.toLocaleString("tr-TR")} TL · SGK işveren: %20,5 (indirimli %15,5) · damga: %0,759.`,
+        `Güncel parametreler: kıdem tavanı 2026/2: ${PARAMS_2026.KIDEM_TAVAN_2.toLocaleString("tr-TR")} TL · brüt asgari ücret: ${PARAMS_2026.ASGARI_UCRET_BRUT.toLocaleString("tr-TR")} TL · SGK işveren: ${pct(PARAMS_2026.SGK_ISVEREN)} (indirimli ${pct(PARAMS_2026.SGK_ISVEREN_TESVIK)}) · damga: %0,759.`,
       ],
     },
   ];
@@ -143,7 +144,7 @@ export function GirisCikisHesap() {
               <Field label="SGK Teşviki">
                 <div className="flex h-9 items-center gap-3">
                   <Switch checked={sgkTesvik} onCheckedChange={setSgkTesvik} id="sgk-tesvik" />
-                  <Label htmlFor="sgk-tesvik" className="text-xs text-muted-foreground">{sgkTesvik ? "Var (%15,5)" : "Yok (%20,5)"}</Label>
+                  <Label htmlFor="sgk-tesvik" className="text-xs text-muted-foreground">{sgkTesvik ? `Var (${pct(PARAMS_2026.SGK_ISVEREN_TESVIK)})` : `Yok (${pct(PARAMS_2026.SGK_ISVEREN)})`}</Label>
                 </div>
               </Field>
               <Field label="BES İşveren Katkı Oranı" hint="örn. 0,03 = %3">
@@ -246,9 +247,9 @@ export function GirisCikisHesap() {
               </ResultBox>
 
               <InfoNote>
-                Güncel parametreler (2026): Kıdem tazminatı tavanı 73.729,87 TL · Brüt asgari ücret
-                33.030,00 TL · SGK tavanı {(PARAMS_2026.SGK_TAVAN).toLocaleString("tr-TR")} TL · SGK işveren
-                %20,5 (5 puanlık indirimle %15,5) · Damga vergisi %0,759 · BES zorunlu katılım %3. 5510
+                Güncel parametreler (2026): Kıdem tazminatı tavanı {PARAMS_2026.KIDEM_TAVAN_2.toLocaleString("tr-TR")} TL ·
+                Brüt asgari ücret {PARAMS_2026.ASGARI_UCRET_BRUT.toLocaleString("tr-TR")} TL · SGK tavanı {PARAMS_2026.SGK_TAVAN.toLocaleString("tr-TR")} TL · SGK işveren
+                {pct(PARAMS_2026.SGK_ISVEREN)} (5 puanlık indirimle {pct(PARAMS_2026.SGK_ISVEREN_TESVIK)}) · Damga vergisi %0,759 · BES zorunlu katılım %3. 5510
                 sayılı SGK Kanunu, 4857 sayılı İş Kanunu, 4632 sayılı BES Kanunu.
               </InfoNote>
             </>

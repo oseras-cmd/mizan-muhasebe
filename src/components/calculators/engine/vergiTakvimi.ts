@@ -107,7 +107,7 @@ export const TAKVIM_2026: TakvimKaydi[] = [
   { ay: 11, gun: 30, ad: "Veraset ve İntikal Vergisi 2. Taksit", kategori: "Vergi", periyot: "Yıllık", not: "2026 ikinci taksit" },
   ...aylikSet(12), ...EDEFTER(12, "Ağustos 2026"),
   // Aralık
-  { ay: 12, gun: 2, ad: "GEKAP Beyannamesi (Temmuz-Ağustos-Eylül)", kategori: "Vergi", periyot: "3 Aylık", not: "3. dönem — 31 Ekim 2026 Cumartesi olduğundan ilk iş günü." },
+  { ay: 11, gun: 2, ad: "GEKAP Beyannamesi (Temmuz-Ağustos-Eylül)", kategori: "Vergi", periyot: "3 Aylık", not: "3. dönem — 31 Ekim 2026 Cumartesi olduğundan ilk iş günü olan 2 Kasım." },
   ...aylikSet(12),
 ];
 

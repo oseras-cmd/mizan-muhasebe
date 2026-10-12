@@ -17,18 +17,18 @@ export const PARAMS_2026 = {
   ASGARI_UCRET_NET: 28075.5,
   ASGARI_UCRET_GUNLUK_BRUT: 1101,
 
-  // SGK oranları
+  // SGK oranları (SGK İşveren Prim Oranları 13.01.2026: MYÖ %12 + GSS %7,5 + kısa vadeli %2,25)
   SGK_ISCI: 0.14,
-  SGK_ISVEREN: 0.205,
-  SGK_ISVEREN_TESVIK: 0.155, // 5 puanlık indirim
+  SGK_ISVEREN: 0.2175,
+  SGK_ISVEREN_TESVIK: 0.1675, // 5 puanlık indirim
   ISSIZLIK_ISCI: 0.01,
   ISSIZLIK_ISVEREN: 0.02,
   GV_DILIM_1: 0.15, // 1. dilim %15 (dilim simülasyonu basit tutuldu)
   DAMGA_UCRET: 0.00759, // binde 7,59
   DAMGA_KIDEM: 0.00759,
 
-  // SGK tavanı = 7,5 × brüt asgari ücret
-  SGK_TAVAN: 33030 * 7.5,
+  // SGK tavanı = 9 × brüt asgari ücret (7573 s. Kanun, 29.01.2026 — 7,5×'tan 9×'a çıkarıldı)
+  SGK_TAVAN: 33030 * 9, // 297.270 TL/ay
 
   // Binek oto amortisman sınırı 2026 tahmini (2025: 611.000)
   BINEK_AMORTISMAN_SINIR_2025: 611000,
@@ -54,7 +54,6 @@ export const PARAMS_2026 = {
   SMM_KDV_ORANI: 0.2,
 } as const;
 
-/** Kıdem tazminatı tavanı — fesih/bordro tarihine göre doğru yarıyılı seçer. */
 /** Kıdem tazminatı tavanı — fesih/bordro tarihine göre doğru yarıyılı seçer. */
 export function kidemTavani(fesihTarihi: string | Date): number {
   const d = typeof fesihTarihi === "string" ? new Date(`${fesihTarihi}T00:00:00`) : fesihTarihi;
