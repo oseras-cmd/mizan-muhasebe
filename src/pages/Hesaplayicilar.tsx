@@ -7,6 +7,7 @@ import { KdvHesap } from "@/components/calculators/KdvHesap";
 import { TevkifatHesap } from "@/components/calculators/TevkifatHesap";
 import { StopajHesap } from "@/components/calculators/StopajHesap";
 import { GelirVergisiDilimHesap } from "@/components/calculators/GelirVergisiDilimHesap";
+import { MaasHesap } from "@/components/calculators/MaasHesap";
 import { MaliyetHesap } from "@/components/calculators/MaliyetHesap";
 import { TiftikMaliyet } from "@/components/calculators/TiftikMaliyet";
 import { MesaiHesap } from "@/components/calculators/MesaiHesap";
@@ -49,6 +50,7 @@ import {
   FileSpreadsheet,
   FileText,
   FileSearch,
+  HandCoins,
   Landmark,
   Layers,
   Percent,
@@ -78,6 +80,7 @@ const TABS = [
   { id: "smm", label: "SMM Makbuzu", icon: ReceiptText },
   { id: "stopaj", label: "Stopaj", icon: Building2 },
   { id: "gvDilim", label: "GV Dilim", icon: TrendingUp },
+  { id: "maas", label: "Maaş Hesap", icon: HandCoins },
   { id: "damga", label: "Damga Vergisi", icon: Stamp },
   { id: "giderpusulasi", label: "Gider Pusulası", icon: FileDigit },
   { id: "finansman", label: "Finansman Kısıtlama", icon: Equal },
@@ -105,7 +108,7 @@ const TAB_GROUPS: { label: string; ids: TabId[] }[] = [
   { label: "Kur & Döviz", ids: ["kur", "kurfarki", "ibkb"] },
   { label: "KDV & Belgeler", ids: ["kdv", "kdvbeyanname", "tevkifat", "smm", "giderpusulasi"] },
   { label: "Vergi Hesapları", ids: ["stopaj", "gvDilim", "damga", "finansman", "binek"] },
-  { label: "Bordro & Personel", ids: ["mesai", "kidem", "giriscikis", "harcirah"] },
+  { label: "Bordro & Personel", ids: ["maas", "mesai", "kidem", "giriscikis", "harcirah"] },
   { label: "Maliyet & Varlıklar", ids: ["maliyet", "tiftik", "masraf", "police", "amortisman", "reeskont", "adat", "enflasyon"] },
   { label: "Analiz & Takip", ids: ["mizan", "edefter", "mukellef", "takvim"] },
 ];
@@ -138,7 +141,6 @@ export default function Hesaplayicilar() {
         } satisfies ExchangeRates,
       }
     : null;
-  const failed = !snapshot && !loading;
 
   return (
     <div className="min-h-screen bg-background pl-64 text-foreground">
@@ -254,6 +256,7 @@ export default function Hesaplayicilar() {
           {active === "smm" && <SmmMakbuzuHesap />}
           {active === "stopaj" && <StopajHesap />}
           {active === "gvDilim" && <GelirVergisiDilimHesap />}
+          {active === "maas" && <MaasHesap />}
           {active === "damga" && <DamgaVergisiHesap />}
           {active === "giderpusulasi" && <GiderPusulasiHesap />}
           {active === "finansman" && <FinansmanKisitlamaHesap />}

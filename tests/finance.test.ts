@@ -27,6 +27,10 @@ import {
 } from "../src/lib/finance/dashboard";
 import { todayIso } from "../src/lib/finance/format";
 import {
+  gerekliMaasBrut,
+  hesaplaMaas,
+} from "../src/components/calculators/engine/maas";
+import {
   computePolicySchedule,
   deleteSavedPolicy,
   getSavedPolicies,
@@ -549,5 +553,64 @@ describe("Yedekleme", () => {
   test("bozuk ve eksik yedekler reddedilir", () => {
     expect(importFinanceData("{bozuk json")).toBe(false);
     expect(importFinanceData('{"foo": 1}')).toBe(false);
+  });
+});
+
+describe("Maaş hesabı (brüt ↔ net, 2026)", () => {
+  const secenek = { asgariIstisna: true, indirimliPrim: false };
+
+  test("brüt 45.000 ₺: Ocak kesintileri ve net doğru", () => {
+    const { satirlar, toplam } = hesaplaMaas(45_000, secenek);
+    const ocak = satirlar[0];
+    expect(ocak.sskIsci).toBeCloseTo(6_300, 2); // %14
+    expect(ocak.issizlikIsci).toBeCloseTo(450, 2); // %1
+    // GV matrahı = 45.000 − 6.750 − asgari ücret istisnası 28.075,50
+    expect(ocak.gv).toBeCloseTo(10_174.5 * 0.15, 2);
+    expect(ocak.damga).toBeCloseTo((45_000 - 33_030) * 0.00759, 2);
+    expect(ocak.net).toBeCloseTo(45_000 - 6_750 - ocak.gv - ocak.damga, 2);
+    expect(toplam.brut).toBeCloseTo(45_000 * 12, 2);
+    expect(toplam.net).toBeCloseTo(
+      satirlar.reduce((s, r) => s + r.net, 0),
+      2,
+    );
+  });
+
+  test("dilim atlama sonrası aylık GV artar (kümülatif)", () => {
+    const { satirlar } = hesaplaMaas(45_000, secenek);
+    expect(satirlar[11].kumMatrah).toBeGreaterThan(satirlar[0].kumMatrah);
+    expect(satirlar[0].kumMatrah).toBeGreaterThan(0);
+  });
+
+  test("asgari ücret brütte tam istisna: GV ve damga 0, net = 28.075,50", () => {
+    const { satirlar } = hesaplaMaas(33_030, secenek);
+    const ocak = satirlar[0];
+    expect(ocak.gv).toBeCloseTo(0, 2);
+    expect(ocak.damga).toBeCloseTo(0, 2);
+    expect(ocak.net).toBeCloseTo(28_075.5, 2);
+  });
+
+  test("SGK tavanı aşan ücrette prim tavanla sınırlı", () => {
+    const { satirlar } = hesaplaMaas(400_000, secenek);
+    expect(satirlar[0].sskIsci).toBeCloseTo(297_270 * 0.14, 2);
+    expect(satirlar[0].issizlikIsveren).toBeCloseTo(297_270 * 0.02, 2);
+  });
+
+  test("işveren maliyeti: normal %21,75+2, indirimli %16,75+2", () => {
+    const normal = hesaplaMaas(45_000, { ...secenek, indirimliPrim: false });
+    const indirimli = hesaplaMaas(45_000, { ...secenek, indirimliPrim: true });
+    expect(normal.satirlar[0].sskIsveren).toBeCloseTo(45_000 * 0.2175, 2);
+    expect(normal.satirlar[0].toplamMaliyet).toBeCloseTo(45_000 + 9_787.5 + 900, 2);
+    expect(indirimli.satirlar[0].sskIsveren).toBeCloseTo(45_000 * 0.1675, 2);
+    expect(indirimli.satirlar[0].toplamMaliyet).toBeCloseTo(45_000 + 7_537.5 + 900, 2);
+  });
+
+  test("netten brüte: hedef net için gereken brüt bulunur", () => {
+    const hedef = 36_632.97;
+    const brut = gerekliMaasBrut(hedef, secenek);
+    expect(brut).not.toBeNull();
+    expect(brut!).toBeCloseTo(45_000, 0);
+    const geri = hesaplaMaas(brut!, secenek);
+    // gerekliBrut 0,5 ₺ toleransla yakınsar
+    expect(Math.abs(geri.satirlar[0].net - hedef)).toBeLessThan(0.5);
   });
 });
