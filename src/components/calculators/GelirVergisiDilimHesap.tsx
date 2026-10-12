@@ -106,8 +106,8 @@ export function GelirVergisiDilimHesap() {
   const gerekenBrut = useMemo(
     () => {
       if (hedefNetSayi <= 0) return null;
-      const { aylikBrut: _omitted, ...rest } = giris;
-      return gerekliBrut(hedefNetSayi, rest);
+      // gerekliBrut aylikBrut'u kendi içinde ezer; tam girdi verilebilir
+      return gerekliBrut(hedefNetSayi, giris);
     },
     [hedefNetSayi, giris],
   );

@@ -33,53 +33,6 @@ const MONTHS = [
 
 const fmt = (v: number) => formatTRY(v).replace("₺", "").trim();
 
-function Row({
-  label,
-  value,
-  onChange,
-  bold,
-}: {
-  label: string;
-  value: number | null;
-  onChange?: (v: number) => void;
-  bold?: boolean;
-}) {
-  return (
-    <tr
-      className={cn(
-        "border-b border-border/40",
-        bold && "bg-muted/40 font-semibold",
-      )}
-    >
-      <td className={cn("px-4 py-2.5", bold ? "text-foreground" : "text-muted-foreground")}>
-        {label}
-      </td>
-      <td className="px-4 py-2.5 text-right">
-        {value === null ? (
-          <span className="text-muted-foreground">—</span>
-        ) : value === 0 ? (
-          <span className="tabular-nums text-muted-foreground">0,00</span>
-        ) : (
-          <span className="font-mono tabular-nums text-foreground">{fmt(value)}</span>
-        )}
-      </td>
-      <td className="px-4 py-2.5 text-right font-mono tabular-nums text-foreground">
-        {value === null || value === 0 ? "0,00" : fmt(value)}
-      </td>
-      {onChange ? (
-        <td className="w-36 px-4 py-1.5">
-          <Input
-            value={value ? formatNumberInput(value) : ""}
-            onChange={(e) => onChange(parseTurkishNumber(e.target.value))}
-            placeholder="0,00"
-            inputMode="decimal"
-            className="h-8 text-right text-sm tabular-nums"
-          />
-        </td>
-      ) : null}
-    </tr>
-  );
-}
 
 function sectionHeader(title: string, icon: React.ReactNode) {
   return (

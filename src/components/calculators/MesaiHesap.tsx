@@ -3,7 +3,6 @@ import { useState, useMemo } from "react";
 import { Input } from "@/components/ui/input";
 import { Field, CalcCard, PrintButton, PrintHeader, ResultBox, ResultRow, ResultTotalRow, InfoNote } from "./shared";
 import { formatTRY, parseTurkishNumber } from "@/lib/finance/format";
-import { cn } from "@/lib/utils";
 
 /* ─────────────── Varsayılan oranlar (%) ─────────────── */
 
@@ -31,13 +30,13 @@ const DEFAULT_RATES: RateState = {
 /* ─────────────── Yardımcı fonksiyonlar ─────────────── */
 
 const gross2daily = (gross: number) => gross / 30;
-const daily2hourly = (daily: number) => daily / 7.5;
+const daily2hourly = (daily: number, gunlukSaat: number) => daily / (gunlukSaat > 0 ? gunlukSaat : 7.5);
 
 /* ─────────────── Bileşen ─────────────── */
 
 export function MesaiHesap() {
   const [brut, setBrut] = useState("20000");
-  const [gunlukSaat, setGunlukSaat] = useState("8");
+  const [gunlukSaat, setGunlukSaat] = useState("7,5"); // yasal günlük çalışma süresi
   const [fazlaGunlukSaat, setFazlaGunlukSaat] = useState("2");
   const [geceSaat, setGeceSaat] = useState("0");
   const [tatilGun, setTatilGun] = useState("0");
@@ -59,7 +58,7 @@ export function MesaiHesap() {
     if (!Number.isFinite(brutValue) || brutValue <= 0) return null;
 
     const gunlukBrut = gross2daily(brutValue);
-    const saatlikBrut = daily2hourly(gunlukBrut);
+    const saatlikBrut = daily2hourly(gunlukBrut, gunlukSaatValue);
 
     // Türkiye'de ayda ortalama ~22,5 iş günü kabul edilir
     const aylikIsgunu = 22.5;

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { AppHeader } from "@/components/AppHeader";
 import { useFinanceData } from "@/lib/finance/store";
 import {
@@ -11,10 +11,9 @@ import {
   deleteSubtask,
   deleteTodoSection,
   updateTodo,
-  updateTodoSection,
 } from "@/lib/finance/store";
 import type { TodoPriority, TodoTask, TodoSection, RecurringType } from "@/lib/finance/types";
-import { TODO_PRIORITY_LABELS, TODO_PRIORITY_COLORS, RECURRING_LABELS } from "@/lib/finance/types";
+import { TODO_PRIORITY_COLORS, RECURRING_LABELS } from "@/lib/finance/types";
 import { cn } from "@/lib/utils";
 import { format, isPast, isToday, isTomorrow, addDays, parseISO } from "date-fns";
 import { tr } from "date-fns/locale";
@@ -34,7 +33,6 @@ import {
   ListChecks,
   X,
   Search,
-  SortAsc,
   Clock,
   CheckCircle2,
   Inbox,
@@ -441,7 +439,7 @@ export default function Gorevler() {
   const [sort, setSort] = useState<SortType>("date");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedSection, setSelectedSection] = useState<string | null>(null);
-  const [showCompleted, setShowCompleted] = useState(false);
+  const [showCompleted] = useState(false); // TODO UI: tamamlananları göster anahtarı henüz eklenmedi
 
   // Add task
   const [newTitle, setNewTitle] = useState("");

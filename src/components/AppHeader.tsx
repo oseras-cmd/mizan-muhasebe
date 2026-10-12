@@ -17,7 +17,6 @@ import {
   Search,
   Settings,
   Sun,
-  Users,
   Wallet,
   X,
 } from "lucide-react";
@@ -126,10 +125,12 @@ export function AppHeader() {
     }
   }, [showSearch]);
 
-  // Sorgu değişince seçili sonucu sıfırla
-  useEffect(() => {
+  // Sorgu değişince seçili sonucu sıfırla (render sırasında ayarlama deseni)
+  const [prevQuery, setPrevQuery] = useState(query);
+  if (query !== prevQuery) {
+    setPrevQuery(query);
     setActiveResult(0);
-  }, [query]);
+  }
 
   const handleExport = (kind: string) => {
     setShowExport(false);

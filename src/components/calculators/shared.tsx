@@ -1,4 +1,3 @@
-import { formatInputValue } from "@/lib/finance/format";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";

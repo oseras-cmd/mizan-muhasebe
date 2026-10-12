@@ -4,7 +4,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Button } from "@/components/ui/button";
 import { useMemo, useRef, useState } from "react";
 import { CalcCard, Field, PrintHeader, ResultBox, ResultRow, ResultTotalRow, InfoNote } from "./shared";
-import { hesaplaHarcirah, harcirahIstisnaGunluk, HARCIRAH_STATU_ADLARI, HARCIRAH_YURT_DISI_GRUPLARI, type HarcirahPersonel } from "./engine/calcEngine";
+import { hesaplaHarcirah, HARCIRAH_STATU_ADLARI, HARCIRAH_YURT_DISI_GRUPLARI, type HarcirahPersonel } from "./engine/calcEngine";
 import { PARAMS_2026 } from "./engine/params";
 import { ExportButtons } from "./engine/ExportButtons";
 import { Trash2, Plus } from "lucide-react";

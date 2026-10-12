@@ -1,7 +1,6 @@
 import { Button } from "@/components/ui/button";
-import { formatTRY, todayIso } from "@/lib/finance/format";
+import { formatTRY } from "@/lib/finance/format";
 import {
-  getActiveReminders,
   getAllReminders,
   requestNotificationPermission,
   dismissReminder,
@@ -29,7 +28,6 @@ import {
   RotateCcw,
   CheckCheck,
   Trash2,
-  Filter,
 } from "lucide-react";
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useNavigate } from "react-router";

@@ -4,9 +4,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { useMemo, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { CalcCard, Field, PrintHeader, ResultBox, ResultRow, ResultTotalRow, InfoNote } from "./shared";
-import { useTcmbRates, type TcmbRate } from "@/lib/finance/tcmbRates";
+import { useTcmbRates } from "@/lib/finance/tcmbRates";
 import { ExportButtons } from "./engine/ExportButtons";
 import { Plus, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -53,35 +53,33 @@ export function IbkbHesap() {
   const girilen = parseTurkishNumber(tutar);
   const kaynakKur = kurGet(kaynak);
   const hedefKur = kurGet(hedef);
-  const sonuc = useMemo(() => {
-    if (!Number.isFinite(girilen) || girilen <= 0 || kaynakKur == null || hedefKur == null) return null;
-    return { tl: girilen * kaynakKur, cevrilmis: (girilen * kaynakKur) / hedefKur };
-  }, [girilen, kaynakKur, hedefKur]);
+  const sonuc =
+    !Number.isFinite(girilen) || girilen <= 0 || kaynakKur == null || hedefKur == null
+      ? null
+      : { tl: girilen * kaynakKur, cevrilmis: (girilen * kaynakKur) / hedefKur };
 
   // Kur farkı: intaç → tahsil (aynı döviz)
   const kfTutarNum = parseTurkishNumber(kfTutar);
   const intacKur = kurGet(kfDoviz);
-  const kurFarkiSonuc = useMemo(() => {
-    if (!Number.isFinite(kfTutarNum) || kfTutarNum <= 0 || intacKur == null) return null;
-    // intaç ve tahsil kuru aynı servisten geldiği için gerçek senaryoda kullanıcı iki farklı tarih kuru girer;
-    // canlı kur tek tarih sunduğu için iki tarih arası farkı elle girebilme yerine gösterge amaçlı aynı kur kullanılır.
-    return { intacTL: kfTutarNum * intacKur, tahsilTL: kfTutarNum * intacKur, fark: 0 };
-  }, [kfTutarNum, intacKur]);
+  // intaç ve tahsil kuru aynı servisten geldiği için gerçek senaryoda kullanıcı iki farklı tarih kuru girer;
+  // canlı kur tek tarih sunduğu için iki tarih arası farkı elle girebilme yerine gösterge amaçlı aynı kur kullanılır.
+  const kurFarkiSonuc =
+    !Number.isFinite(kfTutarNum) || kfTutarNum <= 0 || intacKur == null
+      ? null
+      : { intacTL: kfTutarNum * intacKur, tahsilTL: kfTutarNum * intacKur, fark: 0 };
 
   // Zorunlu satış tablosu
   const zorunluOranNum = parseTurkishNumber(zorunluOran) / 100 || 0;
   const muafiyetSinirNum = parseTurkishNumber(muafiyetSinir) || 0;
-  const satirSonuclari = useMemo(() => {
-    return satirlar.map((s) => {
-      const kur = kurGet(s.doviz);
-      const tl = kur != null && Number.isFinite(s.tutar) ? s.tutar * kur : 0;
-      const usdKarisigi = usdAlis != null && tl > 0 ? tl / usdAlis : 0;
-      const muaf = muafiyetVar && usdKarisigi > 0 && usdKarisigi <= muafiyetSinirNum;
-      const zorunlu = muaf ? 0 : tl * zorunluOranNum;
-      const serbest = tl - zorunlu;
-      return { ...s, kur, tl, usdKarisigi, muaf, zorunlu, serbest };
-    });
-  }, [satirlar, usdAlis, muafiyetVar, muafiyetSinirNum, zorunluOranNum, data]);
+  const satirSonuclari = satirlar.map((s) => {
+    const kur = kurGet(s.doviz);
+    const tl = kur != null && Number.isFinite(s.tutar) ? s.tutar * kur : 0;
+    const usdKarisigi = usdAlis != null && tl > 0 ? tl / usdAlis : 0;
+    const muaf = muafiyetVar && usdKarisigi > 0 && usdKarisigi <= muafiyetSinirNum;
+    const zorunlu = muaf ? 0 : tl * zorunluOranNum;
+    const serbest = tl - zorunlu;
+    return { ...s, kur, tl, usdKarisigi, muaf, zorunlu, serbest };
+  });
 
   const toplamTL = satirSonuclari.reduce((a, x) => a + x.tl, 0);
   const toplamZorunlu = satirSonuclari.reduce((a, x) => a + x.zorunlu, 0);

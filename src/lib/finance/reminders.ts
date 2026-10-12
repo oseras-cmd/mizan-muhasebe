@@ -24,14 +24,18 @@ function getJsonSet(storageKey: string): Set<string> {
   try {
     const raw = localStorage.getItem(storageKey);
     if (raw) return new Set(JSON.parse(raw));
-  } catch {}
+  } catch {
+    /* bozuk/erişilemeyen kayıt yoksayılır */
+  }
   return new Set();
 }
 
 function saveJsonSet(ids: Set<string>, storageKey: string) {
   try {
     localStorage.setItem(storageKey, JSON.stringify([...ids]));
-  } catch {}
+  } catch {
+    /* kota dolu olabilir; sessizce geç */
+  }
 }
 
 /** Günlük hatırlatma turları — kullanıcı gün içinde 3 kez hatırlatılır.
@@ -54,14 +58,18 @@ function getRoundState(): RoundState {
         return { day: parsed.day, round: parsed.round };
       }
     }
-  } catch {}
+  } catch {
+    /* bozuk tur durumu yoksayılır */
+  }
   return { day: todayIso(), round: 0 };
 }
 
 function setRoundState(state: RoundState) {
   try {
     localStorage.setItem(ROUND_STATE_KEY, JSON.stringify(state));
-  } catch {}
+  } catch {
+    /* kota dolu olabilir; sessizce geç */
+  }
 }
 
 
@@ -169,10 +177,9 @@ export function getActiveReminders(): CombinedReminder[] {
 }
 
 export function usePaymentReminders(): CombinedReminder[] {
-  const [reminders, setReminders] = useState<CombinedReminder[]>([]);
+  const [reminders, setReminders] = useState<CombinedReminder[]>(() => getAllReminders());
 
   useEffect(() => {
-    setReminders(getAllReminders());
     const interval = setInterval(() => {
       setReminders(getAllReminders());
     }, 60_000);
@@ -260,7 +267,9 @@ export function fireNativeNotifications() {
       icon: "/favicon.ico",
       tag: `mizan-reminder-${today}-${roundsDone + 1}`,
     });
-  } catch {}
+  } catch {
+    /* bildirim servisi hâlâ izinli değilse sessizce geç */
+  }
 
   // Tur ve acil kayıtlarını işaretle
   if (roundDue) setRoundState({ day: today, round: dueRounds });
@@ -347,7 +356,9 @@ export function clearAllNotificationData() {
     localStorage.removeItem("mizan-notified-payments-v1");
     localStorage.removeItem("mizan-notified-todos-v1");
     localStorage.removeItem("mizan-last-native-notif-v1");
-  } catch {}
+  } catch {
+    /* temizlik hatası kritik değil */
+  }
 }
 
 export { getJsonSet as getNotifiedIds, saveJsonSet as saveNotifiedIds };

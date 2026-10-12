@@ -4,7 +4,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useMemo, useRef, useState } from "react";
-import { CalcCard, Field, PrintHeader, ResultBox, ResultRow, ResultTotalRow, InfoNote, Segmented } from "./shared";
+import { CalcCard, Field, PrintHeader, ResultBox, ResultRow, InfoNote, Segmented } from "./shared";
 import {
   hesaplaAdat,
   okuAdatExcel,

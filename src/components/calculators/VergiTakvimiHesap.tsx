@@ -1,7 +1,7 @@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useMemo, useRef, useState } from "react";
 import { CalcCard, Field, PrintHeader, InfoNote } from "./shared";
-import { TAKVIM_UNIQUE, takvimSiradaki, takvimSonraki, takvimTarih, sonrakiIsGunu, AY_ADLARI, type TakvimKaydi } from "./engine/vergiTakvimi";
+import { TAKVIM_UNIQUE, takvimSiradaki, takvimSonraki, AY_ADLARI, type TakvimKaydi } from "./engine/vergiTakvimi";
 import { ExportButtons } from "./engine/ExportButtons";
 import { cn } from "@/lib/utils";
 import { CalendarClock } from "lucide-react";

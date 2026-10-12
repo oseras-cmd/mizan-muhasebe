@@ -28,7 +28,7 @@ import {
 } from "@/lib/finance/format";
 import { addTransaction, useFinanceData } from "@/lib/finance/store";
 import { buildCashflowProjection } from "@/lib/finance/cashflow";
-import { useTcmbRates, POPULAR_CODES, CURRENCY_SYMBOLS, rateChange, sourceLabel } from "@/lib/finance/tcmbRates";
+import { useTcmbRates, POPULAR_CODES, rateChange, sourceLabel } from "@/lib/finance/tcmbRates";
 import { takvimSiradaki, AY_ADLARI } from "@/components/calculators/engine/vergiTakvimi";
 import { cn } from "@/lib/utils";
 import type { TransactionCategory } from "@/lib/finance/types";
@@ -48,8 +48,6 @@ import {
   RefreshCw,
   ReceiptText,
   Scale,
-  TrendingDown,
-  TrendingUp,
 
   Wallet,
   Zap,

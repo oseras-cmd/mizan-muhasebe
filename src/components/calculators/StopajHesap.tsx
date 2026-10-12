@@ -35,7 +35,6 @@ export function StopajHesap() {
 
   const girilen = parseTurkishNumber(tutar);
   const result = useMemo(() => {
-    const brut = sekil === "net" ? girilen / 0.8 : girilen;
     // net üzerinden girişte formül tip bazında değişir; motor brut alır:
     const oran = { isyeriKira: 0.2, konutKiraKurum: 0.2, serbestMeslek: 0.2, temettu: 0.15, avukatlik: 0.2, insaatTaahhut: 0.15, menkul: 0.175 }[turId];
     const bruto = sekil === "net" ? girilen / (1 - oran) : girilen;

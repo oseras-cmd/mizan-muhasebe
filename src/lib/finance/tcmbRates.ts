@@ -292,7 +292,7 @@ export function useTcmbRates(): {
         setNextRefreshAt(new Date(Date.now() + AUTO_REFRESH_MS));
         setError("Canlı kurlar alınamadı, gösterilen değerler yaklaşık değerlerdir.");
       }
-    } catch (_err) {
+    } catch {
       setData(getLocalFallbackRates());
       setLastUpdated(new Date());
       setNextRefreshAt(new Date(Date.now() + AUTO_REFRESH_MS));

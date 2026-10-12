@@ -142,10 +142,7 @@ function isoOf(date: Date): string {
 }
 
 /** Ödemeleri tarihe göre gruplar: Bugün / Yarın / hafta günü. */
-export function groupPaymentsByDay(
-  data: FinanceData,
-  now = new Date(),
-): PaymentGroup[] {
+export function groupPaymentsByDay(data: FinanceData): PaymentGroup[] {
   const groups = new Map<string, PaymentGroup>();
   for (const payment of upcomingPaymentsSorted(data)) {
     if (daysUntil(payment.dueDate) < 0) continue; // gecikenler ayrı gösterilir

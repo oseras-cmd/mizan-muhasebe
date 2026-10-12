@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useMemo, useRef, useState } from "react";
-import { CalcCard, Field, PrintHeader, InfoNote } from "./shared";
+import { CalcCard, PrintHeader, InfoNote } from "./shared";
 import { analizMizan, type MizanSatir } from "./engine/calcEngine";
 import {
   KATEGORI_ETIKET,
@@ -29,7 +29,7 @@ function sheetToMizan(wb: XLSX.WorkBook, sheetName: string): MizanSatir[] | null
   const yeni: MizanSatir[] = [];
   for (const row of json) {
     const keys = Object.keys(row);
-    const norm = (s: string) => s.toLocaleLowerCase("tr-TR").replace(/[ıi̇şğüöç]/gi, "").replace(/\s+/g, "");
+    const norm = (s: string) => s.toLocaleLowerCase("tr-TR").replace(/[ışğüöçıİ]/g, "").replace(/\s+/g, "");
     const findKey = (patterns: string[]) => keys.find((k) => patterns.some((p) => norm(k).includes(p)));
     const kodK = findKey(["hesapkodu", "kod", "hesap"]) ?? keys[0];
     const adK = findKey(["hesapadi", "ad", "aciklama"]) ?? keys[1];

@@ -3,7 +3,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useMemo, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { CalcCard, Field, PrintHeader, ResultBox, ResultRow, ResultTotalRow, InfoNote } from "./shared";
 import { hesaplaEnflasyon, type EnflasyonKalem } from "./engine/calcEngine";
 import { YIUFE, yiufeDeger, yiufeGuncelDonem } from "./engine/yiufe";
@@ -39,7 +39,7 @@ export function EnflasyonHesap() {
   const areaRef = useRef<HTMLDivElement>(null);
 
   const donemSonuEndeks = yiufeDeger(donemSonuYil, donemSonuAy);
-  const r = useMemo(() => hesaplaEnflasyon(kalemler, donemSonuYil, donemSonuAy), [kalemler, donemSonuYil, donemSonuAy]);
+  const r = hesaplaEnflasyon(kalemler, donemSonuYil, donemSonuAy);
 
   const fmt = (v: number) => v.toLocaleString("tr-TR", { minimumFractionDigits: 2 });
 

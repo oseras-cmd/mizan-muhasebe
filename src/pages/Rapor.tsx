@@ -48,7 +48,6 @@ const chartConfig = {
 export default function Rapor() {
   const data = useFinanceData();
   const now = new Date();
-  const currentKey = monthKeyOf(now);
 
   const [offset, setOffset] = useState(0);
   const month = new Date(now.getFullYear(), now.getMonth() - offset, 1);

@@ -95,7 +95,6 @@ export function buildCashflowProjection(
   now = new Date(),
 ): CashflowResult {
   const todayIso = isoOf(now);
-  const todayDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
   // Bugün içindeki nakit işlemleri (bugüne kadar girilmiş olanlar)
   let todayIncome = 0;

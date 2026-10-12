@@ -618,8 +618,16 @@ export default function Belgeler() {
     setPreviewDoc(doc);
     setPreviewLoading(true);
     // Lazy yükle: büyük belgelerde listeyi bloklamadan veriyi çek
-    window.setTimeout(async () => {
+    window.setTimeout(() => {
       const dataUrl = getDocumentDataUrl(doc.id);
+      // data: URL'i Chromium iframe'lerinde PDF olarak gösterilmediği için
+      // blob: URL'ine çevir (PDF önizlemesi için gerekli)
+      const blob = dataUrl ? dataUrlToBlob(dataUrl) : null;
+      const nextBlobUrl = blob ? URL.createObjectURL(blob) : null;
+      setPreviewBlobUrl((prev) => {
+        if (prev) URL.revokeObjectURL(prev);
+        return nextBlobUrl;
+      });
       setPreviewUrl(dataUrl);
       setPreviewLoading(false);
     }, 50);
@@ -627,20 +635,11 @@ export default function Belgeler() {
 
   const closePreview = () => {
     setPreviewDoc(null);
+    setPreviewBlobUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return null;
+    });
   };
-
-  // data: URL'i Chromium iframe'lerinde PDF olarak gösterilmediği için
-  // blob: URL'ine çevir (PDF önizlemesi için gerekli)
-  useEffect(() => {
-    if (!previewUrl) return;
-    const blob = dataUrlToBlob(previewUrl);
-    if (!blob) return;
-    const objectUrl = URL.createObjectURL(blob);
-    setPreviewBlobUrl(objectUrl);
-    return () => {
-      URL.revokeObjectURL(objectUrl);
-    };
-  }, [previewUrl]);
 
   const displayPreviewUrl = previewBlobUrl ?? previewUrl;
 

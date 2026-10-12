@@ -4,7 +4,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useMemo, useRef, useState } from "react";
-import { CalcCard, Field, PrintHeader, ResultBox, ResultRow, ResultTotalRow, InfoNote } from "./shared";
+import { CalcCard, Field, PrintHeader, ResultBox, ResultRow, InfoNote } from "./shared";
 import { hesaplaReeskont, hesaplaAdat, type Senet } from "./engine/calcEngine";
 import { PARAMS_2026 } from "./engine/params";
 import { ExportButtons } from "./engine/ExportButtons";

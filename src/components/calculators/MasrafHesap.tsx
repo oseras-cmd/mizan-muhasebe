@@ -1,11 +1,9 @@
 import { formatNumberInput } from "@/lib/finance/format";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { formatTRY, parseTurkishNumber } from "@/lib/finance/format";
 import { cn } from "@/lib/utils";
 import {
-  Calculator,
   Plus,
   RotateCcw,
   Trash2,
@@ -16,7 +14,7 @@ import {
   X,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { CalcCard, Field, PrintButton, PrintHeader, ResultBox, ResultRow, ResultTotalRow, formatNumber } from "./shared";
+import { CalcCard, Field, PrintButton, PrintHeader, ResultBox, ResultRow, ResultTotalRow } from "./shared";
 
 /* ─── Sabitler ─── */
 const MASRAF_TURLERI = [
@@ -256,9 +254,9 @@ export function MasrafHesap() {
 
     // Masraf dağılımı
     type DagilimSatir = Record<string, DagilimVal> & Record<number, DagilimVal>;
-    const dagilim: Record<string, DagilimSatir> = {} as any;
+    const dagilim: Record<string, DagilimSatir> = {};
     for (const tur of MASRAF_TURLERI) {
-      dagilim[tur] = {} as any;
+      dagilim[tur] = {};
       for (const oran of KDV_ORANLARI) {
         dagilim[tur][oran] = { matrah: 0, kdv: 0, kkeg: 0, toplam: 0, belgeAdet: 0 };
       }
@@ -333,7 +331,8 @@ export function MasrafHesap() {
   const handleEdit = (id: number) => {
     const item = items.find((i) => i.id === id);
     if (!item) return;
-    const { id: _id, ...rest } = item;
+    const rest = { ...item };
+    delete (rest as { id?: number }).id;
     setForm({ ...EMPTY_ITEM, ...rest });
     setEditingId(id);
     setError(null);
