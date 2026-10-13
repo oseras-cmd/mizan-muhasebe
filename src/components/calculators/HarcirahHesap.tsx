@@ -6,7 +6,7 @@ import { useMemo, useRef, useState } from "react";
 import { CalcCard, Field, PrintHeader, ResultBox, ResultRow, ResultTotalRow, InfoNote } from "./shared";
 import { hesaplaHarcirah, HARCIRAH_STATU_ADLARI, HARCIRAH_YURT_DISI_GRUPLARI, type HarcirahPersonel } from "./engine/calcEngine";
 import { PARAMS_2026 } from "./engine/params";
-import { ExportButtons } from "./engine/ExportButtons";
+import { CalcActions } from "./engine/CalcActions";
 import { Trash2, Plus } from "lucide-react";
 
 let idCounter = 0;
@@ -84,7 +84,7 @@ export function HarcirahHesap() {
             <Button type="button" variant="outline" size="sm" className="gap-1.5 print-hide" onClick={() => setPersoneller((l) => [...l, yeniPersonel("yurtIci")])}>
               <Plus className="size-3.5" /> Personel
             </Button>
-            <ExportButtons
+            <CalcActions
               excelName="mizan-harcirah"
               excelTitle="Harcırah Hesaplama"
               excelSheet="Harcırah"

@@ -4,7 +4,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useMemo, useRef, useState } from "react";
 import { CalcCard, Field, PrintHeader, ResultBox, ResultRow, ResultTotalRow, InfoNote } from "./shared";
 import { hesaplaFinansman } from "./engine/calcEngine";
-import { ExportButtons } from "./engine/ExportButtons";
+import { CalcActions } from "./engine/CalcActions";
 import { cn } from "@/lib/utils";
 
 export function FinansmanKisitlamaHesap() {
@@ -63,7 +63,7 @@ export function FinansmanKisitlamaHesap() {
         title="Finansman Gider Kısıtlaması"
         subtitle="GVK Md.11/11 — KVK Md.11/1-i"
         actions={
-          <ExportButtons
+          <CalcActions
             excelName="mizan-finansman-kisitlama"
             excelTitle="Finansman Gider Kısıtlaması"
             excelSheet="Finansman"

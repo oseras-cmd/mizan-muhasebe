@@ -2,7 +2,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useMemo, useRef, useState } from "react";
 import { CalcCard, Field, PrintHeader, InfoNote } from "./shared";
 import { PARAMS_2026 } from "./engine/params";
-import { ExportButtons } from "./engine/ExportButtons";
+import { CalcActions } from "./engine/CalcActions";
 import { cn } from "@/lib/utils";
 
 type SirketTipi = "sahis" | "limited" | "anonim";
@@ -139,7 +139,7 @@ export function MukellefProfilHesap() {
         title="Mükellef Profil Analizi"
         subtitle="Şirket tipine göre risk alanları, yükümlülükler ve güncel parametreler"
         actions={
-          <ExportButtons
+          <CalcActions
             excelName="mizan-mukellef-profil"
             excelTitle="Mükellef Profil Analizi"
             excelSheet="Mükellef Profili"

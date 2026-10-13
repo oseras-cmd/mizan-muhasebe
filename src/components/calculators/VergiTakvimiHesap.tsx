@@ -2,7 +2,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useMemo, useRef, useState } from "react";
 import { CalcCard, Field, PrintHeader, InfoNote } from "./shared";
 import { TAKVIM_UNIQUE, takvimSiradaki, takvimSonraki, AY_ADLARI, type TakvimKaydi } from "./engine/vergiTakvimi";
-import { ExportButtons } from "./engine/ExportButtons";
+import { CalcActions } from "./engine/CalcActions";
 import { cn } from "@/lib/utils";
 import { CalendarClock } from "lucide-react";
 
@@ -59,7 +59,7 @@ export function VergiTakvimiHesap() {
         title="2026 — Aya Göre Vergi Takvimi"
         subtitle="Beyannameler için tek takvim: KDV, Muhtasar, SGK, ÖTV, GEKAP — bütün son tarihler tek yerde"
         actions={
-          <ExportButtons
+          <CalcActions
             excelName="mizan-vergi-takvimi"
             excelTitle="2026 Vergi Takvimi"
             excelSheet="Vergi Takvimi"

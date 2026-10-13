@@ -3,8 +3,10 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { formatTRY, parseTurkishNumber } from "@/lib/finance/format";
-import { useMemo, useState } from "react";
-import { CalcCard, Field, PrintButton, PrintHeader, ResultBox, ResultRow, ResultTotalRow } from "./shared";
+import { useMemo, useRef, useState } from "react";
+import { CalcCard, Field, PrintHeader, ResultBox, ResultRow, ResultTotalRow } from "./shared";
+import { CalcActions } from "./engine/CalcActions";
+import type { ExcelSection } from "./engine/calcExport";
 
 export function MaliyetHesap() {
   const [alis, setAlis] = useState("10000");
@@ -14,6 +16,7 @@ export function MaliyetHesap() {
   const [adet, setAdet] = useState("100");
   const [iskonto, setIskonto] = useState("0");
   const [kdvli, setKdvli] = useState(false);
+  const areaRef = useRef<HTMLDivElement>(null);
 
   const result = useMemo(() => {
     let alisValue = parseTurkishNumber(alis);
@@ -32,8 +35,35 @@ export function MaliyetHesap() {
     return { toplam, birim, satis: birim * 1.4 };
   }, [alis, nakliye, gumruk, diger, adet, iskonto, kdvli]);
 
+  const excelSections: ExcelSection[] = [
+    {
+      title: "Girdiler",
+      headers: ["Parametre", "Değer"],
+      rows: [
+        ["Alış Fiyatı (₺)", parseTurkishNumber(alis)],
+        ["Nakliye (₺)", parseTurkishNumber(nakliye)],
+        ["Gümrük Vergisi (₺)", parseTurkishNumber(gumruk)],
+        ["Diğer Giderler (₺)", parseTurkishNumber(diger)],
+        ["Miktar (Adet)", parseTurkishNumber(adet)],
+        ["İskonto (%)", parseTurkishNumber(iskonto)],
+        ["KDV dahil giriş", kdvli ? "Evet" : "Hayır"],
+      ],
+    },
+    {
+      title: "Sonuçlar",
+      headers: ["Kalem", "Tutar (₺)"],
+      rows: result
+        ? [
+            ["Toplam Maliyet", result.toplam],
+            ["Birim Maliyet", result.birim],
+            ["%40 Kâr ile Satış Fiyatı", result.satis],
+          ]
+        : [],
+    },
+  ];
+
   return (
-    <div className="print-area">
+    <div className="print-area" ref={areaRef}>
       <PrintHeader
         title="Maliyet Hesaplama Raporu"
         subtitle={result ? `Birim maliyet ${formatTRY(result.birim)} · ${adet} adet` : undefined}
@@ -41,7 +71,17 @@ export function MaliyetHesap() {
       <CalcCard
         title="Maliyet Hesaplama"
         subtitle="Alış, nakliye ve diğer giderlerle birim maliyet ve kârlı satış fiyatı"
-        actions={<PrintButton />}
+        actions={
+          <CalcActions
+            excelName="mizan-maliyet"
+            excelTitle="Maliyet Hesaplama"
+            excelSheet="Maliyet"
+            excelSections={excelSections}
+            pdfTargetRef={areaRef}
+            pdfName="mizan-maliyet"
+            disabled={!result}
+          />
+        }
       >
       <div className="grid gap-6">
         <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">

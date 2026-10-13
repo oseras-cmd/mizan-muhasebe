@@ -7,7 +7,7 @@ import { useMemo, useRef, useState } from "react";
 import { CalcCard, Field, PrintHeader, ResultBox, ResultRow, InfoNote } from "./shared";
 import { hesaplaReeskont, hesaplaAdat, type Senet } from "./engine/calcEngine";
 import { PARAMS_2026 } from "./engine/params";
-import { ExportButtons } from "./engine/ExportButtons";
+import { CalcActions } from "./engine/CalcActions";
 import { Plus, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -96,7 +96,7 @@ export function ReeskontHesap() {
             <Button type="button" variant="outline" size="sm" className="gap-1.5 print-hide" onClick={() => addSenet("senet")}>
               <Plus className="size-3.5" /> Senet/Çek
             </Button>
-            <ExportButtons
+            <CalcActions
               excelName="mizan-reeskont"
               excelTitle="Reeskont ve Adat Hesaplama"
               excelSheet="Reeskont"

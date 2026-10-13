@@ -4,7 +4,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useMemo, useRef, useState } from "react";
 import { CalcCard, Field, PrintHeader, ResultBox, ResultRow, ResultTotalRow, InfoNote } from "./shared";
 import { hesaplaGiderPusulasi, GIDER_PUSULASI_BENTLER, type GiderPusulasiBent } from "./engine/calcEngine";
-import { ExportButtons } from "./engine/ExportButtons";
+import { CalcActions } from "./engine/CalcActions";
 import { cn } from "@/lib/utils";
 
 type Yon = "brutten" | "netten";
@@ -74,7 +74,7 @@ export function GiderPusulasiHesap() {
         title="Gider Pusulası Hesaplama"
         subtitle="Stopaj oranı, netten brüte çevirme ve VUK 234 yedi gün kontrolü — GVK 94/13"
         actions={
-          <ExportButtons
+          <CalcActions
             excelName="mizan-gider-pusulasi"
             excelTitle="Gider Pusulası Hesaplama"
             excelSheet="Gider Pusulası"

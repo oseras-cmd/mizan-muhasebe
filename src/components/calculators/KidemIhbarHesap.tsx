@@ -4,7 +4,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useMemo, useRef, useState } from "react";
 import { CalcCard, Field, PrintHeader, ResultBox, ResultRow, ResultTotalRow, InfoNote } from "./shared";
 import { hesaplaKidemIhbar, FESIH_ADLARI, type FesihNedeni } from "./engine/calcEngine";
-import { ExportButtons } from "./engine/ExportButtons";
+import { CalcActions } from "./engine/CalcActions";
 
 export function KidemIhbarHesap() {
   const [iseGiris, setIseGiris] = useState("2018-06-01");
@@ -86,7 +86,7 @@ export function KidemIhbarHesap() {
         title="Kıdem & İhbar Tazminatı Hesaplama"
         subtitle="Giydirilmiş brüt, tavan kontrolü, damga/GV kesintileri"
         actions={
-          <ExportButtons
+          <CalcActions
             excelName="mizan-kidem-ihbar"
             excelTitle="Kıdem ve İhbar Tazminatı Hesaplama"
             excelSheet="Kıdem-İhbar"

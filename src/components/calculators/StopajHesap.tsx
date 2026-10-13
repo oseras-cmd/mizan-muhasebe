@@ -13,7 +13,7 @@ import {
   CalcCard, Field, PrintHeader, ResultBox, ResultRow, ResultTotalRow, Segmented, InfoNote,
 } from "./shared";
 import { hesaplaStopaj, type StopajTuru } from "./engine/calcEngine";
-import { ExportButtons } from "./engine/ExportButtons";
+import { CalcActions } from "./engine/CalcActions";
 
 const STOPAJ_TYPES: { id: StopajTuru; label: string }[] = [
   { id: "isyeriKira", label: "İşyeri Kira — %20" },
@@ -73,7 +73,7 @@ export function StopajHesap() {
         title="Stopaj Hesaplama"
         subtitle="Kira, serbest meslek, temettü ve avukatlık stopajları — GVK m.94"
         actions={
-          <ExportButtons
+          <CalcActions
             excelName="mizan-stopaj"
             excelTitle="Stopaj Hesaplama"
             excelSheet="Stopaj"

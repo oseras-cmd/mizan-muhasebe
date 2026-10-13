@@ -7,7 +7,7 @@ import { useMemo, useRef, useState } from "react";
 import { CalcCard, Field, PrintHeader, ResultBox, ResultRow, ResultTotalRow, InfoNote } from "./shared";
 import { hesaplaGirisCikis, FESIH_ADLARI, type FesihNedeni } from "./engine/calcEngine";
 import { PARAMS_2026 } from "./engine/params";
-import { ExportButtons } from "./engine/ExportButtons";
+import { CalcActions } from "./engine/CalcActions";
 
 export function GirisCikisHesap() {
   const [brutMaas, setBrutMaas] = useState("45000");
@@ -107,7 +107,7 @@ export function GirisCikisHesap() {
         title="İşe Giriş / Çıkış Maliyet Simülatörü"
         subtitle="Çalışanın toplam işe alım ve işten çıkış maliyetini karşılaştırmalı hesaplayın"
         actions={
-          <ExportButtons
+          <CalcActions
             excelName="mizan-ise-giris-cikis"
             excelTitle="İşe Giriş / Çıkış Maliyet Simülatörü"
             excelSheet="Giriş-Çıkış"

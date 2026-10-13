@@ -17,7 +17,7 @@ import {
   Segmented,
   formatNumber,
 } from "./shared";
-import { ExportButtons, type ExcelSection } from "./engine/ExportButtons";
+import { CalcActions, type ExcelSection } from "./engine/CalcActions";
 
 const DEFAULTS = {
   miktar: "11.440",
@@ -381,7 +381,7 @@ export function TiftikMaliyet({ usdRate }: { usdRate?: number | null }) {
         subtitle="Ham tiftikten satılabilir ürüne: fire akışı, maliyet kalemleri ve kâr analizi"
         actions={
           <div className="flex gap-2">
-            <ExportButtons
+            <CalcActions
               excelName="mizan-tiftik-maliyet"
               excelTitle="Tiftik Maliyet Hesaplama"
               excelSheet="Tiftik Maliyet"

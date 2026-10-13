@@ -8,8 +8,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { formatTRY, parseTurkishNumber } from "@/lib/finance/format";
-import { useMemo, useState } from "react";
-import { CalcCard, Field, PrintButton, PrintHeader, ResultBox, ResultRow, ResultTotalRow, Segmented } from "./shared";
+import { useMemo, useRef, useState } from "react";
+import { CalcCard, Field, PrintHeader, ResultBox, ResultRow, ResultTotalRow, Segmented } from "./shared";
+import { CalcActions } from "./engine/CalcActions";
+import type { ExcelSection } from "./engine/calcExport";
 
 type KdvTip = "haric" | "dahil" | "kdvden";
 
@@ -22,6 +24,7 @@ export function KdvHesap() {
   const [tip, setTip] = useState<KdvTip>("haric");
   const [tutar, setTutar] = useState("10000");
   const [oran, setOran] = useState("20");
+  const areaRef = useRef<HTMLDivElement>(null);
 
   const value = parseTurkishNumber(tutar);
   const rate = Number(oran) / 100;
@@ -42,8 +45,34 @@ export function KdvHesap() {
     return { matrah, kdv: value - matrah, toplam: value };
   }, [tip, value, rate]);
 
+  const TIP_ADI =
+    tip === "haric" ? "KDV Hariç → Dahil" : tip === "dahil" ? "KDV Dahil → Hariç" : "KDV Tutarından → Matrah";
+
+  const excelSections: ExcelSection[] = [
+    {
+      title: "Girdiler",
+      headers: ["Parametre", "Değer"],
+      rows: [
+        ["Hesaplama Türü", TIP_ADI],
+        ["Tutar (₺)", parseTurkishNumber(tutar)],
+        ["KDV Oranı", `%${oran}`],
+      ],
+    },
+    {
+      title: "Sonuçlar",
+      headers: ["Kalem", "Tutar (₺)"],
+      rows: result
+        ? [
+            ["Matrah (KDV Hariç)", r2(result.matrah)],
+            ["KDV Tutarı", r2(result.kdv)],
+            ["Toplam (KDV Dahil)", r2(result.toplam)],
+          ]
+        : [],
+    },
+  ];
+
   return (
-    <div className="print-area">
+    <div className="print-area" ref={areaRef}>
       <PrintHeader
         title="KDV Hesaplama Raporu"
         subtitle={
@@ -55,7 +84,17 @@ export function KdvHesap() {
       <CalcCard
         title="KDV Hesaplama"
         subtitle="KDV hariç / dahil dönüşümü ve KDV tutarından matrah bulma"
-        actions={<PrintButton />}
+        actions={
+          <CalcActions
+            excelName="mizan-kdv"
+            excelTitle="KDV Hesaplama"
+            excelSheet="KDV"
+            excelSections={excelSections}
+            pdfTargetRef={areaRef}
+            pdfName="mizan-kdv"
+            disabled={!result}
+          />
+        }
       >
       <div className="grid gap-6">
         <Segmented<KdvTip>

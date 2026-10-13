@@ -1,7 +1,9 @@
 import { formatInputValue } from "@/lib/finance/format";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import { Input } from "@/components/ui/input";
-import { Field, CalcCard, PrintButton, PrintHeader, ResultBox, ResultRow, ResultTotalRow, InfoNote } from "./shared";
+import { Field, CalcCard, PrintHeader, ResultBox, ResultRow, ResultTotalRow, InfoNote } from "./shared";
+import { CalcActions } from "./engine/CalcActions";
+import type { ExcelSection } from "./engine/calcExport";
 import { formatTRY, parseTurkishNumber } from "@/lib/finance/format";
 
 /* ─────────────── Varsayılan oranlar (%) ─────────────── */
@@ -42,6 +44,7 @@ export function MesaiHesap() {
   const [tatilGun, setTatilGun] = useState("0");
 
   const [rates, setRates] = useState<RateState>(DEFAULT_RATES);
+  const areaRef = useRef<HTMLDivElement>(null);
 
   const setRate = (key: keyof RateState, value: string) => {
     const num = parseTurkishNumber(value);
@@ -112,8 +115,44 @@ export function MesaiHesap() {
     { key: "partTimeExtra", label: "Kısmi Süreli Ek", suffix: "%" },
   ];
 
+  const excelSections: ExcelSection[] = [
+    {
+      title: "Girdiler",
+      headers: ["Parametre", "Değer"],
+      rows: [
+        ["Aylık Brüt Ücret (₺)", brutValue],
+        ["Günlük Çalışma Saati", gunlukSaatValue],
+        ["Fazla Mesai (saat/gün)", fazlaGunlukSaatValue],
+        ["Gece Mesai (saat/gün)", geceSaatValue],
+        ["Tatil Günü (ayda)", tatilGunValue],
+      ],
+    },
+    {
+      title: "Oranlar (%)",
+      headers: ["Oran", "Değer (%)"],
+      rows: rateInputs.map(({ key, label }) => [label, rates[key]]),
+    },
+    {
+      title: "Sonuçlar",
+      headers: ["Kalem", "Tutar (₺)"],
+      rows: sonuc
+        ? [
+            ["Günlük Brüt", sonuc.gunlukBrut],
+            ["Saatlik Brüt", sonuc.saatlikBrut],
+            ["Fazla Mesai (aylık)", sonuc.fazlaMesaiAylik],
+            ["Gece Mesai Ek (aylık)", sonuc.geceEkAylik],
+            ["Tatil Ücreti", sonuc.tatilUcret],
+            ["Kısmi Süreli Ek", sonuc.kismiSuresiAylik],
+            ["Toplam Ek Ödeme (aylık)", sonuc.toplamEk],
+            ["Toplam Aylık Brüt", sonuc.toplamAylikBrut],
+          ]
+        : [],
+      footers: sonuc ? [`Toplam Aylık Brüt: ${sonuc.toplamAylikBrut.toFixed(2)} TL`] : undefined,
+    },
+  ];
+
   return (
-    <div className="print-area">
+    <div className="print-area" ref={areaRef}>
       <PrintHeader
         title="Mesai Hesaplama Raporu"
         subtitle={sonuc ? `Aylık brüt ${formatTRY(brutValue)} · Toplam aylık brüt ${formatTRY(sonuc.toplamAylikBrut)}` : undefined}
@@ -122,8 +161,16 @@ export function MesaiHesap() {
         title="İşçi Mesai Hesaplama"
         subtitle="Brüt aylık ücrete göre fazla mesai, gece ve tatil ücretlerini hesaplayın"
         actions={
-          <div className="flex items-center gap-2">
-            <PrintButton />
+          <div className="flex flex-wrap items-center gap-2">
+            <CalcActions
+              excelName="mizan-mesai"
+              excelTitle="Mesai Hesaplama"
+              excelSheet="Mesai"
+              excelSections={excelSections}
+              pdfTargetRef={areaRef}
+              pdfName="mizan-mesai"
+              disabled={!sonuc}
+            />
             <button
               type="button"
               className="print-hide text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"

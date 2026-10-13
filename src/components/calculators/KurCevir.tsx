@@ -18,8 +18,10 @@ import {
 } from "@/lib/finance/historicalRates";
 import { convertRate, type RateSnapshot } from "@/lib/finance/rates";
 import { ArrowLeftRight } from "lucide-react";
-import { useEffect, useState } from "react";
-import { CalcCard, Field, InfoNote, PrintButton, PrintHeader, Segmented, formatNumber } from "./shared";
+import { useEffect, useRef, useState } from "react";
+import { CalcCard, Field, InfoNote, PrintHeader, Segmented, formatNumber } from "./shared";
+import { CalcActions } from "./engine/CalcActions";
+import type { ExcelSection } from "./engine/calcExport";
 
 const CURRENCIES = [
   { code: "TRY", label: "Türk Lirası" },
@@ -48,6 +50,7 @@ function withSymbol(code: string, value: number, maxFraction: number): string {
 type KurMod = "canli" | "tarihli";
 
 export function KurCevir({ snapshot }: { snapshot: RateSnapshot | null }) {
+  const areaRef = useRef<HTMLDivElement>(null);
   const [mod, setMod] = useState<KurMod>("canli");
   const [amount, setAmount] = useState("1000");
   const [from, setFrom] = useState("TRY");
@@ -143,8 +146,59 @@ export function KurCevir({ snapshot }: { snapshot: RateSnapshot | null }) {
       : null;
   const hUnit = hist ? convertHistorical(hist.rates, hFrom, hTo, 1) : null;
 
+  const excelSections: ExcelSection[] =
+    mod === "canli"
+      ? [
+          {
+            title: "Girdiler",
+            headers: ["Parametre", "Değer"],
+            rows: [
+              ["Mod", "Canlı Kur (TCMB)"],
+              ["Miktar", value],
+              ["Kimden", from],
+              ["Kime", to],
+            ],
+          },
+          {
+            title: "Sonuçlar",
+            headers: ["Kalem", "Değer"],
+            rows:
+              result !== null
+                ? [
+                    ["Dönüştürülen Tutar", result],
+                    ...(unit !== null ? [[`1 ${from} = ${unit} ${to}`] as (string | number | null)[]] : []),
+                    ...(parite !== null ? [["EUR/USD Paritesi", parite]] : []),
+                  ]
+                : [],
+          },
+        ]
+      : [
+          {
+            title: "Girdiler",
+            headers: ["Parametre", "Değer"],
+            rows: [
+              ["Mod", "Tarihli Kur"],
+              ["Miktar", hValue],
+              ["Kimden", hFrom],
+              ["Kime", hTo],
+              ["Kur Tarihi", tarih],
+            ],
+          },
+          {
+            title: "Sonuçlar",
+            headers: ["Kalem", "Değer"],
+            rows:
+              hResult !== null
+                ? [
+                    ["Dönüştürülen Tutar", hResult],
+                    ...(hUnit !== null ? [[`1 ${hFrom} = ${hUnit} ${hTo}`] as (string | number | null)[]] : []),
+                  ]
+                : [],
+          },
+        ];
+
   return (
-    <div className="print-area">
+    <div className="print-area" ref={areaRef}>
       <PrintHeader
         title="Kur Çevirme Raporu"
         subtitle={result !== null ? `${from} → ${to} dönüşümü` : undefined}
@@ -152,7 +206,17 @@ export function KurCevir({ snapshot }: { snapshot: RateSnapshot | null }) {
       <CalcCard
         title="Kur Çevirici"
         subtitle="Canlı kurlarla para birimi dönüştürün"
-        actions={<PrintButton />}
+        actions={
+          <CalcActions
+            excelName="mizan-kur-cevir"
+            excelTitle="Kur Çevirme"
+            excelSheet="Kur Çevir"
+            excelSections={excelSections}
+            pdfTargetRef={areaRef}
+            pdfName="mizan-kur-cevir"
+            disabled={mod === "canli" ? result === null : hResult === null}
+          />
+        }
       >
       <div className="grid gap-6">
         <Segmented<KurMod>

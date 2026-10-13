@@ -13,8 +13,10 @@ import {
   Pencil,
   X,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { CalcCard, Field, PrintButton, PrintHeader, ResultBox, ResultRow, ResultTotalRow } from "./shared";
+import { CalcActions } from "./engine/CalcActions";
+import type { ExcelSection } from "./engine/calcExport";
 
 /* ─── Sabitler ─── */
 const MASRAF_TURLERI = [
@@ -219,6 +221,7 @@ function fmt(value: number): string {
 type DagilimVal = { matrah: number; kdv: number; kkeg: number; toplam: number; belgeAdet: number };
 
 export function MasrafHesap() {
+  const areaRef = useRef<HTMLDivElement>(null);
   const [initial] = useState(loadMasrafData);
   const [firma, setFirma] = useState<FirmaBilgileri>(initial.firma);
   const [items, setItems] = useState<MasrafItem[]>(initial.items);
@@ -373,8 +376,73 @@ export function MasrafHesap() {
     return MASRAF_TURLERI.filter((t) => kullanilan.has(t));
   }, [items]);
 
+  const excelSections: ExcelSection[] = [
+    {
+      title: "Belge Bilgileri",
+      headers: ["Parametre", "Değer"],
+      rows: [
+        ["Firma", firma.firmaAdi],
+        ["Şirket", firma.sirket],
+        ["İşyeri", firma.isyeri],
+        [
+          "Dönem",
+          `${firma.yil}${firma.ay ? ` ${firma.ay}` : ""}${firma.gunAraligi ? ` (${firma.gunAraligi})` : ""}`,
+        ],
+        ["Belge Tarihi", firma.belgeTarihi],
+      ],
+    },
+    {
+      title: `Masraf Kalemleri (${items.length})`,
+      headers: [
+        "Belge Tipi",
+        "Masraf Adı",
+        "Tür",
+        "Belge No",
+        "Tarih",
+        "KDV %",
+        "Fiş Toplamı (₺)",
+        "K.K.E.G. (₺)",
+        "Masraf Merkezi",
+      ],
+      rows: items.map((item) => [
+        item.belgeTipi,
+        item.masrafAdi,
+        item.masrafTuru,
+        item.faturaFisNo,
+        item.belgeTarihi,
+        item.kdvOrani,
+        item.fisToplam,
+        item.kkeg,
+        item.masrafMerkez,
+      ]),
+    },
+    {
+      title: "KDV Oranına Göre Dağılım",
+      headers: ["KDV Oranı", "Matrah (₺)", "KDV (₺)"],
+      rows: KDV_ORANLARI.flatMap((oran) => {
+        const s = hesaplamalar.kdvSutunlari[oran];
+        return s && (s.matrah !== 0 || s.kdv !== 0)
+          ? ([[`%${oran}`, s.matrah, s.kdv]] as (string | number)[][])
+          : [];
+      }),
+      footers: [`K.K.E.G. Toplam: ${hesaplamalar.toplamKkeg.toFixed(2)} TL`],
+    },
+    {
+      title: "Toplamlar",
+      headers: ["Kalem", "Değer / Tutar"],
+      rows: [
+        ["Toplam Belge", `${hesaplamalar.belgeAdet} adet`],
+        ["Fiş / Fatura Toplamı (₺)", hesaplamalar.toplamFis],
+        ["Toplam K.K.E.G. (₺)", hesaplamalar.toplamKkeg],
+        ["Toplam Matrah (₺)", hesaplamalar.toplamMatrah],
+        ["Toplam KDV (₺)", hesaplamalar.toplamKdv],
+      ],
+      footers: [`Genel Toplam: ${hesaplamalar.genelToplam.toFixed(2)} TL`],
+    },
+  ];
+
   return (
-    <div className="print-area space-y-6">
+    <div className="print-area space-y-6" ref={areaRef}>
       <PrintHeader
         title="Masraf Listesi Raporu"
         subtitle={
@@ -391,7 +459,21 @@ export function MasrafHesap() {
       {/* Firma Bilgileri + Ekleme Formu */}
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Firma Bilgileri */}
-        <CalcCard title="Belge Bilgileri" subtitle="Şirket ve dönem bilgileri">
+        <CalcCard
+          title="Belge Bilgileri"
+          subtitle="Şirket ve dönem bilgileri"
+          actions={
+            <CalcActions
+              excelName="mizan-masraf"
+              excelTitle="Masraf Listesi"
+              excelSheet="Masraf"
+              excelSections={excelSections}
+              pdfTargetRef={areaRef}
+              pdfName="mizan-masraf"
+              disabled={items.length === 0}
+            />
+          }
+        >
           <div className="grid gap-4">
             <Field label="Belge Düzenleme Tarihi">
               <Input

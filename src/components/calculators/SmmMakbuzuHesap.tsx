@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { useMemo, useRef, useState } from "react";
 import { CalcCard, Field, PrintHeader, ResultBox, ResultRow, ResultTotalRow, InfoNote } from "./shared";
 import { hesaplaSmm } from "./engine/calcEngine";
-import { ExportButtons } from "./engine/ExportButtons";
+import { CalcActions } from "./engine/CalcActions";
 
 type HesapTuru = "tahsilEdilenden" | "brutten" | "netten";
 
@@ -67,7 +67,7 @@ export function SmmMakbuzuHesap() {
         title="Serbest Meslek Makbuzu Hesaplama"
         subtitle="Brüt/net tutar, gelir vergisi tevkifatı, KDV ve KDV tevkifatı"
         actions={
-          <ExportButtons
+          <CalcActions
             excelName="mizan-smm-makbuzu"
             excelTitle="Serbest Meslek Makbuzu Hesaplama"
             excelSheet="SMM Makbuzu"

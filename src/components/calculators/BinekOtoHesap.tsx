@@ -5,7 +5,7 @@ import { useMemo, useRef, useState } from "react";
 import { CalcCard, Field, PrintHeader, ResultBox, ResultRow, ResultTotalRow, InfoNote } from "./shared";
 import { hesaplaBinek } from "./engine/calcEngine";
 import { PARAMS_2026 } from "./engine/params";
-import { ExportButtons } from "./engine/ExportButtons";
+import { CalcActions } from "./engine/CalcActions";
 import { cn } from "@/lib/utils";
 
 export function BinekOtoHesap() {
@@ -73,7 +73,7 @@ export function BinekOtoHesap() {
         title="Binek Otomobil Gider Kısıtlaması"
         subtitle="GVK Md.40/5 — 68/5"
         actions={
-          <ExportButtons
+          <CalcActions
             excelName="mizan-binek-oto"
             excelTitle="Binek Otomobil Gider Kısıtlaması"
             excelSheet="Binek Oto"

@@ -13,7 +13,7 @@ import {
   Segmented,
   formatNumber,
 } from "./shared";
-import { ExportButtons } from "./engine/ExportButtons";
+import { CalcActions } from "./engine/CalcActions";
 import {
   gerekliMaasBrut,
   hesaplaMaas,
@@ -121,7 +121,7 @@ export function MaasHesap() {
         title="Maaş Hesaplama"
         subtitle="Brüt maaştan nete, aylık SGK, gelir ve damga vergisi dökümü — verginet tarzı"
         actions={
-          <ExportButtons
+          <CalcActions
             excelName="mizan-maas-hesaplama"
             excelTitle="Maaş Hesaplama 2026"
             excelSheet="Maaş"

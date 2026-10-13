@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { useMemo, useRef, useState } from "react";
 import { CalcCard, Field, PrintHeader, InfoNote } from "./shared";
 import { hesaplaAmortisman, type Kiyimet } from "./engine/calcEngine";
-import { ExportButtons } from "./engine/ExportButtons";
+import { CalcActions } from "./engine/CalcActions";
 import { Trash2, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -78,7 +78,7 @@ export function AmortismanHesap() {
             <Button type="button" variant="outline" size="sm" className="gap-1.5 print-hide" onClick={() => setKiyimetler((l) => [...l, yeniKiyimet()])}>
               <Plus className="size-3.5" /> Kıymet
             </Button>
-            <ExportButtons
+            <CalcActions
               excelName="mizan-amortisman"
               excelTitle="Amortisman Hesaplama"
               excelSheet="Amortisman"

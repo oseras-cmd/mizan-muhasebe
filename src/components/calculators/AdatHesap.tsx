@@ -12,7 +12,7 @@ import {
   type AdatIslem,
   type AdatOranDonemi,
 } from "./engine/adatEngine";
-import { ExportButtons } from "./engine/ExportButtons";
+import { CalcActions } from "./engine/CalcActions";
 import { Plus, Trash2, Upload } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -186,7 +186,7 @@ export function AdatHesap() {
         title="Kasa / Cari Adat (TCMB Faizi) Hesaplama"
         subtitle="Kasada/cari hesapta bekleyen fazla para için TCMB avans faiz oranıyla adat faizi, KDV ve muhasebe fişi — Excel şablonunuzdan doğrudan yükleyebilirsiniz"
         actions={
-          <ExportButtons
+          <CalcActions
             excelName="mizan-adat"
             excelTitle="Kasa / Cari Adat Faiz Hesaplama"
             excelSheet="Adat"

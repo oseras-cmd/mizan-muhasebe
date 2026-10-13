@@ -24,9 +24,11 @@ import {
   Scale,
   Trash2,
 } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { toast } from "sonner";
-import { CalcCard, Field, InfoNote, PrintButton, PrintHeader, formatNumber } from "./shared";
+import { CalcCard, Field, InfoNote, PrintHeader, formatNumber } from "./shared";
+import { CalcActions } from "./engine/CalcActions";
+import type { ExcelSection } from "./engine/calcExport";
 
 const EXPENSE_ACCOUNTS = [
   { value: "770", label: "770 — Genel Yönetim Giderleri" },
@@ -57,6 +59,7 @@ function hesapAdi(code: string): string {
 }
 
 export function PoliceGider() {
+  const areaRef = useRef<HTMLDivElement>(null);
   const [type, setType] = useState("");
   const [account, setAccount] = useState("770");
   const [number, setNumber] = useState("");
@@ -144,13 +147,71 @@ export function PoliceGider() {
   const quarterTotals: Record<string, number> = {};
   for (const row of rows) { quarterTotals[row.periodLabel] = (quarterTotals[row.periodLabel] ?? 0) + row.amount; }
 
+  const excelSections: ExcelSection[] = [
+    {
+      title: "Girdiler",
+      headers: ["Parametre", "Değer"],
+      rows: [
+        ["Poliçe Türü", type],
+        ["Hesap Kodu (İlk Ay Gideri)", account],
+        ["Poliçe No", number],
+        ["Başlangıç Tarihi", startDate],
+        ["Brüt Poliçe Tutarı (₺)", amountValue],
+      ],
+    },
+    {
+      title: "Aylık Dağılım",
+      headers: ["Hesap", "Dönem", "Ay", "Gün", "Aylık Bedel (₺)", "Dönemsel Bedel (₺)"],
+      rows: rows.map((row) => {
+        const quarterRows = rows.filter((r) => r.periodLabel === row.periodLabel);
+        const isLastInQuarter = quarterRows[quarterRows.length - 1] === row;
+        return [
+          hesapAdi(row.accountCode),
+          row.periodLabel,
+          row.monthName,
+          row.days,
+          row.amount,
+          isLastInQuarter ? (quarterTotals[row.periodLabel] ?? 0) : 0,
+        ];
+      }),
+      footers: schedule ? [`K.K.E.G. (689): ${schedule.kkegAmount.toFixed(2)} TL`, `Toplam: ${amountValue.toFixed(2)} TL`] : undefined,
+      notes: ["Binek araç poliçelerinde tutarın %30'u K.K.E.G. (689) olarak ayrılır."],
+    },
+    {
+      title: "Hesap Özeti",
+      headers: ["Hesap", "Tutar (₺)"],
+      rows: schedule
+        ? [
+            [accountLabel(account), schedule.totals[account] ?? 0],
+            [accountLabel("180"), schedule.totals[180] ?? 0],
+            [accountLabel("280"), schedule.totals[280] ?? 0],
+            ...(isBinek ? [[accountLabel("689"), schedule.kkegAmount] as (string | number)[]] : []),
+          ]
+        : [],
+    },
+  ];
+
   return (
-    <div className="print-area">
+    <div className="print-area" ref={areaRef}>
       <PrintHeader
         title="Poliçe Gider Dağılım Raporu"
         subtitle={schedule ? `${type} · ${number || "Poliçe yok"} · ${startDate}` : undefined}
       />
-      <CalcCard title="Aylık Poliçe Gider Dağılımı" subtitle="Yıllık poliçe tutarının aylara ve muhasebe hesaplarına göre dağılımı (770 · 180 · 280)">
+      <CalcCard
+        title="Aylık Poliçe Gider Dağılımı"
+        subtitle="Yıllık poliçe tutarının aylara ve muhasebe hesaplarına göre dağılımı (770 · 180 · 280)"
+        actions={
+          <CalcActions
+            excelName="mizan-police-gider"
+            excelTitle="Poliçe Gider Dağılımı"
+            excelSheet="Poliçe Gider"
+            excelSections={excelSections}
+            pdfTargetRef={areaRef}
+            pdfName="mizan-police-gider"
+            disabled={!schedule}
+          />
+        }
+      >
       <div className="grid gap-6">
         <div className="grid gap-5 sm:grid-cols-2">
           <Field label="Poliçe Türü">
@@ -185,8 +246,7 @@ export function PoliceGider() {
         <div className="flex flex-wrap gap-2">
           <Button type="button" onClick={compute}><Calculator className="mr-2 size-4" />Hesapla</Button>
           <Button type="button" variant="outline" onClick={handleSave}><Save className="mr-2 size-4" />Kaydet</Button>
-          <Button type="button" variant="outline" onClick={exportCsv}><FileDown className="mr-2 size-4" />Excel</Button>
-          <PrintButton className="h-9" />
+          <Button type="button" variant="outline" onClick={exportCsv}><FileDown className="mr-2 size-4" />CSV</Button>
           <Button type="button" variant="outline" onClick={handleCompare}><Scale className="mr-2 size-4" />Karşılaştır</Button>
         </div>
 

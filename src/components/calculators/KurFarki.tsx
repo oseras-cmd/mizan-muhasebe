@@ -14,8 +14,8 @@ import {
   type RateCurrency,
 } from "@/lib/finance/rates";
 import { cn } from "@/lib/utils";
-import { Calculator, Printer } from "lucide-react";
-import { useState } from "react";
+import { Calculator } from "lucide-react";
+import { useRef, useState } from "react";
 import {
   CalcCard,
   Field,
@@ -25,6 +25,8 @@ import {
   ResultTotalRow,
   formatNumber,
 } from "./shared";
+import { CalcActions } from "./engine/CalcActions";
+import type { ExcelSection } from "./engine/calcExport";
 
 const DOVIZ_OPTIONS: { code: RateCurrency; label: string }[] = [
   { code: "USD", label: "USD — Dolar" },
@@ -44,6 +46,7 @@ interface KurFarkiResult {
 }
 
 export function KurFarki() {
+  const areaRef = useRef<HTMLDivElement>(null);
   const [doviz, setDoviz] = useState<RateCurrency>("USD");
   const [tutar, setTutar] = useState("10000");
   const [baslangic, setBaslangic] = useState("");
@@ -104,8 +107,45 @@ export function KurFarki() {
     }
   };
 
+  const excelSections: ExcelSection[] = [
+    {
+      title: "Girdiler",
+      headers: ["Parametre", "Değer"],
+      rows: [
+        ["Döviz Cinsi", doviz],
+        ["Döviz Tutarı", parseTurkishNumber(tutar)],
+        ["Başlangıç Tarihi", baslangic],
+        ["Bitiş Tarihi", bitis || todayIso()],
+      ],
+    },
+    {
+      title: "Sonuçlar",
+      headers: ["Kalem", "Değer"],
+      rows: result
+        ? [
+            ["Başlangıç Kuru (1 " + doviz + ")", result.startRate],
+            ["Bitiş Kuru (1 " + doviz + ")", result.endRate],
+            ["Kur Değişimi (%)", result.pct],
+            ["Eski Değer (TL)", result.eskiDeger],
+            ["Yeni Değer (TL)", result.yeniDeger],
+            ["Kur Farkı (TL)", result.fark],
+          ]
+        : [],
+      footers: result
+        ? [
+            result.fark > 0
+              ? `Kambiyo Kârı: +${result.fark.toFixed(2)} TL`
+              : result.fark < 0
+                ? `Kambiyo Zararı: ${result.fark.toFixed(2)} TL`
+                : "Kur farkı yok",
+          ]
+        : undefined,
+      notes: ["Kambiyo kârı/zararı GVK m.81 kapsamındadır; beyan ve istisna uygulamasına göre vergilendirilir."],
+    },
+  ];
+
   return (
-    <div className="print-area">
+    <div className="print-area" ref={areaRef}>
       <PrintHeader
         title="İki Tarih Arası Kur Farkı Raporu"
         subtitle={result ? `${doviz} · ${result.startDate} — ${result.endDate}` : undefined}
@@ -114,14 +154,15 @@ export function KurFarki() {
         title="İki Tarih Arası Kur Farkı"
         subtitle="Döviz cinsi ve tutar için kambiyo kârı / zararı hesaplama"
         actions={
-          <button
-            type="button"
-            onClick={() => window.print()}
-            className="print-hide inline-flex h-8 items-center gap-1.5 rounded-md border bg-card px-3 text-xs font-medium text-foreground transition-colors hover:bg-muted"
-          >
-            <Printer className="size-3.5" />
-            Yazdır
-          </button>
+          <CalcActions
+            excelName="mizan-kur-farki"
+            excelTitle="İki Tarih Arası Kur Farkı"
+            excelSheet="Kur Farkı"
+            excelSections={excelSections}
+            pdfTargetRef={areaRef}
+            pdfName="mizan-kur-farki"
+            disabled={!result}
+          />
         }
       >
       <div className="grid gap-6">

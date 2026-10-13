@@ -5,7 +5,7 @@ import { useMemo, useRef, useState } from "react";
 import { CalcCard, Field, PrintHeader, ResultBox, ResultRow, ResultTotalRow, InfoNote } from "./shared";
 import { hesaplaDamga, type DamgaBelgeTuru } from "./engine/calcEngine";
 import { PARAMS_2026 } from "./engine/params";
-import { ExportButtons } from "./engine/ExportButtons";
+import { CalcActions } from "./engine/CalcActions";
 
 const BELGE_TURLERI: { id: DamgaBelgeTuru; label: string }[] = [
   { id: "sozlesme", label: "Sözleşme (Akit) — binde 9,48" },
@@ -68,7 +68,7 @@ export function DamgaVergisiHesap() {
         title="Damga Vergisi Hesaplama"
         subtitle="Sözleşme, makbuz ve resmî belgelerin damga vergisi tutarı"
         actions={
-          <ExportButtons
+          <CalcActions
             excelName="mizan-damga-vergisi"
             excelTitle="Damga Vergisi Hesaplama"
             excelSheet="Damga Vergisi"

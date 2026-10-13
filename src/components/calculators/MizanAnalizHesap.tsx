@@ -12,7 +12,7 @@ import {
   kontrolAsistani,
   type KontrolBulgu,
 } from "./engine/kontrolAsistani";
-import { ExportButtons } from "./engine/ExportButtons";
+import { CalcActions } from "./engine/CalcActions";
 import { Plus, ShieldCheck, Trash2, Upload } from "lucide-react";
 import { cn } from "@/lib/utils";
 import * as XLSX from "xlsx";
@@ -197,7 +197,7 @@ export function MizanAnalizHesap() {
         title="Mizan Analiz Aracı"
         subtitle="Excel mizan dosyanızı yükleyin, ters bakiye, olağandışı hareketler, riskli hesaplar ve KDV uyumsuzluklarını anında tespit edin"
         actions={
-          <ExportButtons
+          <CalcActions
             excelName="mizan-analiz"
             excelTitle="Mizan Analiz Raporu"
             excelSheet="Mizan Analiz"

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -24,7 +24,9 @@ import {
   ReceiptText,
   Scale,
 } from "lucide-react";
-import { PrintButton, PrintHeader } from "./shared";
+import { PrintHeader } from "./shared";
+import { CalcActions } from "./engine/CalcActions";
+import type { ExcelSection } from "./engine/calcExport";
 
 const MONTHS = [
   "Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran",
@@ -45,6 +47,7 @@ function sectionHeader(title: string, icon: React.ReactNode) {
 
 export function KdvBeyannameHesap() {
   const now = new Date();
+  const areaRef = useRef<HTMLDivElement>(null);
   const [month, setMonth] = useState(now.getMonth());
   const [year, setYear] = useState(now.getFullYear());
   const [input, setInput] = useState<KdvBeyannameInput>({ ...EMPTY_KDV_INPUT });
@@ -85,15 +88,82 @@ export function KdvBeyannameHesap() {
       ),
     );
 
+  const excelSections: ExcelSection[] = [
+    {
+      title: "Dönem",
+      headers: ["Parametre", "Değer"],
+      rows: [
+        ["Ay", MONTHS[month]],
+        ["Yıl", year],
+      ],
+    },
+    {
+      title: "Girdiler",
+      headers: ["Kalem", "Tutar (₺)"],
+      rows: [
+        ["%1 KDV'li Satış Matrahı", input.satis1],
+        ["%10 KDV'li Satış Matrahı", input.satis10],
+        ["%20 KDV'li Satış Matrahı", input.satis20],
+        ["KDV'den İstisna Satışlar", input.istisnaSatis],
+        ["%1 KDV'li Alış Matrahı", input.alis1],
+        ["%10 KDV'li Alış Matrahı", input.alis10],
+        ["%20 KDV'li Alış Matrahı", input.alis20],
+        ["Önceki Dönemden Devreden KDV", input.devredenOnceki],
+        ["Tevkifata Tabi Satış KDV'si", input.tevkifatSatis],
+      ],
+    },
+    {
+      title: "KDV Hesaplama Tablosu",
+      headers: ["Kalem", "Matrah (₺)", "KDV (₺)"],
+      rows: sonuc.tablo
+        .filter((row) => !(row.matrah === null && Number.isNaN(row.kdv)))
+        .map((row) => [row.kalem, row.matrah, row.kdv]),
+    },
+    {
+      title: "Sonuç",
+      headers: ["Kalem", "Tutar (₺)"],
+      rows: [
+        ["Ödenecek KDV", sonuc.odenecek],
+        ["Sonraki Döneme Devreden KDV", sonuc.devreden],
+      ],
+      footers: [
+        sonuc.odenecek > 0
+          ? `Ödenecek KDV: ${sonuc.odenecek.toFixed(2)} TL (son gün: ayın 28'i)`
+          : `Devreden KDV: ${sonuc.devreden.toFixed(2)} TL`,
+      ],
+    },
+    ...(sonuc.muhasebeKaydi.length > 0
+      ? [
+          {
+            title: "Muhasebe Kaydı",
+            headers: ["Hesap", "Hesap Adı", "Borç (₺)", "Alacak (₺)"],
+            rows: sonuc.muhasebeKaydi.map((row) => [
+              row.hesap,
+              row.hesapAdi,
+              row.borc,
+              row.alacak,
+            ]),
+          },
+        ]
+      : []),
+  ];
+
   return (
-    <div className="print-area space-y-6">
+    <div className="print-area space-y-6" ref={areaRef}>
       <PrintHeader
         title="KDV-1 Beyanname Hesaplama Raporu"
         subtitle={`${MONTHS[month]} ${year} dönemi · ${sonuc.odenecek > 0 ? "Ödenecek KDV" : "Devreden KDV"} ${fmt(sonuc.odenecek > 0 ? sonuc.odenecek : sonuc.devreden)} ₺`}
       />
-      {/* Yazdır butonu — ekranda, hesap tablosunun üstünde */}
+      {/* Kaydet / Kayıtlar / Dışa aktar — ekranda, hesap tablosunun üstünde */}
       <div className="print-hide flex justify-end">
-        <PrintButton className="h-9" />
+        <CalcActions
+          excelName="mizan-kdv-beyanname"
+          excelTitle="KDV-1 Beyanname Hesaplama"
+          excelSheet="KDV Beyanname"
+          excelSections={excelSections}
+          pdfTargetRef={areaRef}
+          pdfName="mizan-kdv-beyanname"
+        />
       </div>
       {/* Beyanname Dönemi */}
       <section className="rounded-lg border bg-card">

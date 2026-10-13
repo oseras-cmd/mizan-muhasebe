@@ -3,7 +3,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { useRef, useState } from "react";
 import { CalcCard, PrintHeader, InfoNote } from "./shared";
-import { ExportButtons } from "./engine/ExportButtons";
+import { CalcActions } from "./engine/CalcActions";
 import { Upload } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -227,7 +227,7 @@ export function XmlEdefterHesap() {
         title="XML e-Defter Görüntüleyici"
         subtitle="Yevmiye, Kebir, Berat ve Defter Raporu XML dosyalarınızı saniyeler içinde okunabilir, yazdırılabilir belgeye çevirin — %100 cihazınızda işlenir"
         actions={
-          <ExportButtons
+          <CalcActions
             excelName="mizan-edefter"
             excelTitle="XML e-Defter Görüntüleme"
             excelSheet="e-Defter"

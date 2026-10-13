@@ -20,7 +20,7 @@ import {
   InfoNote,
   formatNumber,
 } from "./shared";
-import { ExportButtons } from "./engine/ExportButtons";
+import { CalcActions } from "./engine/CalcActions";
 import {
   hesaplaYillik,
   simuleEt,
@@ -176,7 +176,7 @@ export function GelirVergisiDilimHesap() {
         title="Gelir Vergisi Dilim Simülatörü"
         subtitle="2026 dilimleriyle kümülatif matrah, dilim atlama, net maaş ve işveren maliyeti"
         actions={
-          <ExportButtons
+          <CalcActions
             excelName="mizan-gelir-vergisi-dilim"
             excelTitle="Gelir Vergisi Dilim Simülasyonu"
             excelSheet="GV Dilim"

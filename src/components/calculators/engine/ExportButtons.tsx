@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 
 export type { ExcelSection };
 
-interface ExportButtonsProps {
+export interface ExportButtonsProps {
   /** Excel dosya adı (tarih otomatik eklenir) */
   excelName?: string;
   /** Excel bölümleri — hesaplayıcı kendi verisinden üretir */

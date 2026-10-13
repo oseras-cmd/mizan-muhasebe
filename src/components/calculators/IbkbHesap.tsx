@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { useRef, useState } from "react";
 import { CalcCard, Field, PrintHeader, ResultBox, ResultRow, ResultTotalRow, InfoNote } from "./shared";
 import { useTcmbRates } from "@/lib/finance/tcmbRates";
-import { ExportButtons } from "./engine/ExportButtons";
+import { CalcActions } from "./engine/CalcActions";
 import { Plus, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -125,7 +125,7 @@ export function IbkbHesap() {
         title="İBKB Hesaplama — TCMB Kuru ile Döviz Çevirici"
         subtitle="Geçmiş tarihli TCMB kuru sorgulama, çapraz kur çevirimi, zorunlu satış ve 15.000 USD muafiyet hesabı"
         actions={
-          <ExportButtons
+          <CalcActions
             excelName="mizan-ibkb"
             excelTitle="İBKB Hesaplama"
             excelSheet="İBKB"

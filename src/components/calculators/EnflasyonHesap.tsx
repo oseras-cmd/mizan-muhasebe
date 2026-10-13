@@ -7,7 +7,7 @@ import { useRef, useState } from "react";
 import { CalcCard, Field, PrintHeader, ResultBox, ResultRow, ResultTotalRow, InfoNote } from "./shared";
 import { hesaplaEnflasyon, type EnflasyonKalem } from "./engine/calcEngine";
 import { YIUFE, yiufeDeger, yiufeGuncelDonem } from "./engine/yiufe";
-import { ExportButtons } from "./engine/ExportButtons";
+import { CalcActions } from "./engine/CalcActions";
 import { Plus, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -79,7 +79,7 @@ export function EnflasyonHesap() {
         title="Enflasyon Düzeltmesi (VUK Mük. md.298)"
         subtitle="Yİ-ÜFE endeks tablosu, düzeltme katsayısı, dönemsel düzeltme raporu"
         actions={
-          <ExportButtons
+          <CalcActions
             excelName="mizan-enflasyon-duzeltmesi"
             excelTitle="Enflasyon Düzeltmesi Hesaplama"
             excelSheet="Enflasyon"

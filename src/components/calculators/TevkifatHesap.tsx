@@ -8,8 +8,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { formatTRY, parseTurkishNumber } from "@/lib/finance/format";
-import { useMemo, useState } from "react";
-import { CalcCard, Field, InfoNote, PrintButton, PrintHeader } from "./shared";
+import { useMemo, useRef, useState } from "react";
+import { CalcCard, Field, InfoNote, PrintHeader } from "./shared";
+import { CalcActions } from "./engine/CalcActions";
+import type { ExcelSection } from "./engine/calcExport";
 
 /* ─── Tevkifat Oranları — KDV Tebliği Seri No 1 ────────── */
 const TEVKIFAT_OPTIONS = [
@@ -159,6 +161,7 @@ function compute(matrah: string, kdvOranStr: string, tevIndex: string): CalcResu
 
 /* ─── Bileşen ────────────────────────────────────────────── */
 export function TevkifatHesap() {
+  const areaRef = useRef<HTMLDivElement>(null);
   const [matrah, setMatrah] = useState("10000");
   const [kdvOran, setKdvOran] = useState("20");
   const [tevIndex, setTevIndex] = useState("4"); // Varsayılan: 5/10
@@ -167,8 +170,98 @@ export function TevkifatHesap() {
 
   const option = TEVKIFAT_OPTIONS[Number(tevIndex)] ?? TEVKIFAT_OPTIONS[0];
 
+  const excelSections: ExcelSection[] = [
+    {
+      title: "Girdiler",
+      headers: ["Parametre", "Değer"],
+      rows: [
+        ["KDV Hariç Tutar (₺)", parseTurkishNumber(matrah)],
+        ["KDV Oranı", `%${kdvOran}`],
+        ["Tevkifat Oranı", `${option.label} — ${option.desc}`],
+      ],
+    },
+    {
+      title: "Genel Hesaplama",
+      headers: ["Kalem", "Tutar (₺)"],
+      rows: result
+        ? [
+            ["KDV Hariç", result.kdvHaric],
+            ["KDV Tutarı", result.kdvTutari],
+            ["KDV Dahil", result.kdvDahil],
+            ["Fatura Düzenleme Alt Sınırı", result.faturaAltSinir],
+            ["Tevkif Edilen Tutar", result.tevkifEdilenTutar],
+            ["Hesaplanan KDV", result.hesaplananKdv],
+          ]
+        : [],
+      footers: result ? [`Genel Toplam: ${result.genelToplam.toFixed(2)} TL`] : undefined,
+    },
+    {
+      title: "e-Belge (e-Fatura / e-Arşiv)",
+      headers: ["Kalem", "Tutar (₺)"],
+      rows: result
+        ? [
+            ["Mal/Hizmet Toplam Tutar", result.malHizmetToplam],
+            ["Hesaplanan KDV", result.eBelgeKdv],
+            ["Tevkifata Tabi İşlem Tutarı", result.tevkifataTabiTutar],
+            ["Tevkifata Tabi İşlem Üzerinden Hes. KDV", result.tevkifataTabiKdv],
+            ["Hesaplanan KDV Tevkifat", result.kdvTevkifat],
+            ["Vergiler Dahil Toplam Tutar", result.vergilerDahil],
+          ]
+        : [],
+      footers: result
+        ? [
+            `Ödenecek Tutar: ${result.odenecek.toFixed(2)} TL`,
+            `Satıcı ${result.odenecek.toFixed(2)} TL alır · Alıcı ${result.kdvTevkifat.toFixed(2)} TL'yi devlete beyan eder`,
+          ]
+        : undefined,
+    },
+    {
+      title: "Satış — KDV 1 Beyannamesi",
+      headers: ["Matrah (₺)", "KDV Oranı", "Kod (KDV 1)", "Tevkifat Oranı", "Vergi (₺)"],
+      rows: result
+        ? [[result.satisMatrah, `%${result.satisKdvOrani}`, result.satisKdvKodu, result.satisTevOrani, result.satisTevVergi]]
+        : [],
+      footers: ["Bildirim Eki (Alıcı Beyanı)"],
+    },
+    {
+      title: "Kısmi Tevkifat Bildirim Eki",
+      headers: ["İşlem Tutarı (KDV Hariç)", "KDV Oranı", "Hes. KDV'si", "Tev. Oranı", "Tev. Tutarı (Alıcı Beyan)"],
+      rows: result
+        ? [
+            [
+              result.satisBildirimTutar,
+              `%${result.satisBildirimKdvOrani}`,
+              result.satisBildirimKdvHes,
+              result.satisBildirimTevOrani,
+              result.satisBildirimTevTutar,
+            ],
+          ]
+        : [],
+    },
+    {
+      title: "Alış — KDV 1 Beyannamesi",
+      headers: ["İndirim Türü", "Tutar (₺)"],
+      rows: result
+        ? [
+            ["Kısmi Tevkifat Uygulanan İşlemler (Yurt İçi KDV)", result.alisYurtIciKdv],
+            ...(result.alisSorumluKdv > 0
+              ? [["Sorumlu Sıfatıyla Beyan Edilen KDV", result.alisSorumluKdv] as (string | number)[]]
+              : []),
+          ]
+        : [],
+      footers: result ? [`Alıcı indirimi: ${result.alisVergi.toFixed(2)} TL`] : undefined,
+    },
+    {
+      title: "KDV 2 Beyannamesi (Alıcı Bildirimi)",
+      headers: ["Matrah (₺)", "Oran", "Kod (KDV 2)", "Tevkifat Oranı", "Vergi (₺)"],
+      rows: result
+        ? [[result.kdv2Matrah, `%${result.kdv2Oran}`, result.kdv2Kodu, result.kdv2TevOrani, result.kdv2Vergi]]
+        : [],
+    },
+  ];
+
   return (
-    <div className="print-area">
+    <div className="print-area" ref={areaRef}>
       <PrintHeader
         title="KDV Tevkifat Hesaplama Raporu"
         subtitle={result ? `Matrah ${formatTRY(result.kdvHaric)} · KDV %${result.kdvOrani * 100} · Tevkifat ${option.label}` : undefined}
@@ -176,7 +269,17 @@ export function TevkifatHesap() {
       <CalcCard
         title="KDV Tevkifat Hesaplama"
         subtitle="TÜRMOB / GİB — Satış ve alış yönünde tevkifat, beyanname ve bildirim hesaplamaları"
-        actions={<PrintButton />}
+        actions={
+          <CalcActions
+            excelName="mizan-tevkifat"
+            excelTitle="KDV Tevkifat Hesaplama"
+            excelSheet="Tevkifat"
+            excelSections={excelSections}
+            pdfTargetRef={areaRef}
+            pdfName="mizan-tevkifat"
+            disabled={!result}
+          />
+        }
       >
       <div className="grid gap-6">
         {/* ─── Girdiler ─── */}
