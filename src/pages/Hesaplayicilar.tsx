@@ -59,6 +59,7 @@ import {
   RefreshCw,
   ShieldCheck,
   Stamp,
+  Star,
   Table2,
   Banknote,
   TrendingUp,
@@ -66,7 +67,7 @@ import {
   Users,
   Wallet,
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useSearchParams } from "react-router";
 
 const TABS = [
@@ -104,6 +105,25 @@ const TABS = [
 
 type TabId = (typeof TABS)[number]["id"];
 
+/* ─── Favori hesaplamalar (localStorage) ─── */
+const FAVORILER_KEY = "mizan-fav-hesaplamalar-v1";
+
+function loadFavoriler(): TabId[] {
+  try {
+    const raw = window.localStorage.getItem(FAVORILER_KEY);
+    if (!raw) return [];
+    const parsed: unknown = JSON.parse(raw);
+    if (Array.isArray(parsed)) {
+      return parsed.filter((id): id is TabId =>
+        TABS.some((t) => t.id === id),
+      );
+    }
+  } catch {
+    // Bozuk veri — boş favori listesiyle devam et.
+  }
+  return [];
+}
+
 const TAB_GROUPS: { label: string; ids: TabId[] }[] = [
   { label: "Kur & Döviz", ids: ["kur", "kurfarki", "ibkb"] },
   { label: "KDV & Belgeler", ids: ["kdv", "kdvbeyanname", "tevkifat", "smm", "giderpusulasi"] },
@@ -127,6 +147,54 @@ export default function Hesaplayicilar() {
   const tabParam = searchParams.get("tab");
   const initialTab = TABS.some((t) => t.id === tabParam) ? (tabParam as TabId) : "kur";
   const [active, setActive] = useState<TabId>(initialTab);
+  const [favoriler, setFavoriler] = useState<TabId[]>(loadFavoriler);
+
+  /* Favorileri kalıcı depoya yaz */
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(FAVORILER_KEY, JSON.stringify(favoriler));
+    } catch {
+      // Depo dolu/erşilemez — favoriler bu oturumda korunur.
+    }
+  }, [favoriler]);
+
+  const toggleFavori = (id: TabId) => {
+    setFavoriler((prev) =>
+      prev.includes(id) ? prev.filter((f) => f !== id) : [...prev, id],
+    );
+  };
+
+  /** Sekme çipi: tıkla → aç, yıldız → favorilere ekle/çıkar. */
+  const chip = (id: TabId) => {
+    const tab = TABS.find((t) => t.id === id)!;
+    const fav = favoriler.includes(id);
+    return (
+      <span key={id} className="relative inline-flex shrink-0">
+        <button
+          type="button"
+          onClick={() => setActive(id)}
+          className={cn(
+            "flex shrink-0 items-center gap-1.5 rounded-full border py-1.5 pl-3 pr-8 text-[13px] font-medium transition-colors",
+            active === id
+              ? "border-foreground bg-foreground text-background"
+              : "border-border bg-card text-muted-foreground hover:border-foreground/30 hover:text-foreground",
+          )}
+        >
+          <tab.icon className="size-3.5" />
+          {tab.label}
+        </button>
+        <button
+          type="button"
+          onClick={() => toggleFavori(id)}
+          aria-label={fav ? "Favorilerden çıkar" : "Favorilere ekle"}
+          title={fav ? "Favorilerden çıkar" : "Favorilere ekle"}
+          className="absolute right-1 top-1/2 -translate-y-1/2 rounded-full p-1 text-muted-foreground/50 transition-colors hover:bg-muted/60 hover:text-amber-500"
+        >
+          <Star className={cn("size-3", fav && "fill-amber-400 text-amber-500")} />
+        </button>
+      </span>
+    );
+  };
   const { data: tcmbData, loading, error: ratesError, refresh: refreshRates } = useTcmbRates();
   // Map TcmbRate[] → RateSnapshot for KurCevir/KurFarki
   const snapshot = tcmbData
@@ -158,7 +226,8 @@ export default function Hesaplayicilar() {
           <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
             Canlı döviz kurları, vergi, bordro, maliyet ve analiz hesaplamaları — günlük
             muhasebe işleriniz için {TABS.length} araç. Tüm sonuçlar Excel, PDF ve
-            yazdırılabilir rapor olarak alınabilir.
+            yazdırılabilir rapor olarak alınabilir. Beğendiğiniz hesaplamaların yanındaki
+            yıldıza basarak Favoriler bölümünde toplayabilirsiniz.
           </p>
         </div>
 
@@ -215,31 +284,22 @@ export default function Hesaplayicilar() {
 
         {/* Gruplu sekme barı */}
         <div className="mt-8 space-y-3 border-b border-border/70 pb-4">
+          {favoriler.length > 0 && (
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="mr-1 flex w-36 shrink-0 items-center gap-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/60">
+                <Star className="size-3 fill-amber-400 text-amber-500" />
+                Favoriler
+              </span>
+              <div className="flex flex-wrap gap-1.5">{favoriler.map(chip)}</div>
+            </div>
+          )}
           {TAB_GROUPS.map((group) => (
             <div key={group.label} className="flex flex-wrap items-center gap-1.5">
               <span className="mr-1 w-36 shrink-0 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/60">
                 {group.label}
               </span>
               <div className="flex flex-wrap gap-1.5">
-                {group.ids.map((id) => {
-                  const tab = TABS.find((t) => t.id === id)!;
-                  return (
-                    <button
-                      key={id}
-                      type="button"
-                      onClick={() => setActive(id)}
-                      className={cn(
-                        "flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-[13px] font-medium transition-colors",
-                        active === id
-                          ? "border-foreground bg-foreground text-background"
-                          : "border-border bg-card text-muted-foreground hover:border-foreground/30 hover:text-foreground",
-                      )}
-                    >
-                      <tab.icon className="size-3.5" />
-                      {tab.label}
-                    </button>
-                  );
-                })}
+                {group.ids.map(chip)}
               </div>
             </div>
           ))}

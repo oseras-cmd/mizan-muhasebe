@@ -10,16 +10,39 @@ import {
   ReceiptText,
   Building2,
   FileSpreadsheet,
+  FileUp,
   Pencil,
   X,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
+import { toast } from "sonner";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  ARAC_PLAKALARI,
+  GUN_ARALIKLARI,
+  ILLER,
+  MASRAF_CINSLERI,
+  MASRAF_KDV_ORANLARI,
+  ODEME_TURLERI_XLSX,
+  SATICILAR,
+} from "@/data/masrafListesi";
+import {
+  masrafDosyasiAyristir,
+  type MasrafSatiri,
+} from "@/lib/finance/masrafImport";
 import { CalcCard, Field, PrintButton, PrintHeader, ResultBox, ResultRow, ResultTotalRow } from "./shared";
 import { CalcActions } from "./engine/CalcActions";
 import type { ExcelSection } from "./engine/calcExport";
 
 /* ─── Sabitler ─── */
-const MASRAF_TURLERI = [
+const APP_MASRAF_TURLERI = [
   "Araç Yakıt Gideri",
   "Araç Otopark ve Viyadük",
   "Araç Tamir ve Bakım",
@@ -42,6 +65,27 @@ const MASRAF_TURLERI = [
   "Diğer",
 ] as const;
 
+/** Listeleri birleştirir; aynı ad (büyük/küçük harf duyarsız) yalnız bir kez yazılır. */
+function birlestir(...listeler: readonly (readonly string[])[]): string[] {
+  const sonuc: string[] = [];
+  const gorulen = new Set<string>();
+  for (const liste of listeler) {
+    for (const ham of liste) {
+      const v = ham.trim();
+      if (!v) continue;
+      const k = normTr(v);
+      if (!gorulen.has(k)) {
+        gorulen.add(k);
+        sonuc.push(v);
+      }
+    }
+  }
+  return sonuc;
+}
+
+/** Uygulamanın türleri + Excel VERİ BANKASI'ndaki masraf cinsleri. */
+const MASRAF_TURLERI: string[] = birlestir(APP_MASRAF_TURLERI, MASRAF_CINSLERI);
+
 const BELGE_TURLERI = [
   "Fatura",
   "Fiş",
@@ -51,15 +95,21 @@ const BELGE_TURLERI = [
   "Diğer",
 ] as const;
 
-const KDV_ORANLARI = [0, 1, 10, 20] as const;
+/** Sabit oranlar + VERİ BANKASI oranları (%8/%18/%26 2023 geçiş oranları). */
+const KDV_ORANLARI: number[] = [...new Set([0, 1, 10, 20, ...MASRAF_KDV_ORANLARI])].sort(
+  (a, b) => a - b,
+);
 
-const ODEME_TURLERI = [
+const APP_ODEME_TURLERI = [
   "Nakit",
   "Kredi Kartı",
   "Havale / EFT",
   "Çek",
   "Diğer",
 ] as const;
+
+/** Uygulama türleri + Excel'deki ödeme türleri (kart hesapları, nakit, çek, senet …). */
+const ODEME_TURLERI: string[] = birlestir(APP_ODEME_TURLERI, ODEME_TURLERI_XLSX);
 
 const MASRAF_MERKEZLERI = [
   "Genel",
@@ -99,6 +149,12 @@ interface FirmaBilgileri {
   ay: string;
   gunAraligi: string;
   belgeTarihi: string;
+}
+
+/** İçe aktarma dialogu: sayfa listesi + seçim durumu */
+interface IceAktarimDurumu {
+  fileName: string;
+  sayfalar: { ad: string; satirlar: MasrafSatiri[]; secili: boolean }[];
 }
 
 /* ─── Varsayılan ─── */
@@ -229,6 +285,8 @@ export function MasrafHesap() {
   const [form, setForm] = useState<Omit<MasrafItem, "id">>({ ...EMPTY_ITEM });
   const [editingId, setEditingId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [importState, setImportState] = useState<IceAktarimDurumu | null>(null);
 
   /* Her değişiklikte kalıcı depoya yaz */
   useEffect(() => {
@@ -244,6 +302,11 @@ export function MasrafHesap() {
 
   /* ─── KDV Sütunları hesapla ─── */
   const hesaplamalar = useMemo(() => {
+    // Kullanılan KDV oranları: sabit liste + dosyadan gelen oranlar (ör. %8/%18/%26)
+    const oranlar = [...new Set([...KDV_ORANLARI, ...items.map((i) => i.kdvOrani)])]
+      .filter((o) => Number.isFinite(o))
+      .sort((a, b) => a - b);
+
     let toplamMatrah = 0;
     let toplamKdv = 0;
     let toplamKkeg = 0;
@@ -251,21 +314,21 @@ export function MasrafHesap() {
     let belgeAdet = 0;
 
     const kdvSutunlari: Record<number, { matrah: number; kdv: number }> = {};
-    for (const oran of KDV_ORANLARI) {
+    for (const oran of oranlar) {
       kdvSutunlari[oran] = { matrah: 0, kdv: 0 };
     }
 
     // Masraf dağılımı
     type DagilimSatir = Record<string, DagilimVal> & Record<number, DagilimVal>;
+    const bosDagilim = (): DagilimVal => ({ matrah: 0, kdv: 0, kkeg: 0, toplam: 0, belgeAdet: 0 });
+    const satirOlustur = (): DagilimSatir => {
+      const satir = {} as DagilimSatir;
+      for (const oran of oranlar) satir[oran] = bosDagilim();
+      satir["kkeg"] = bosDagilim();
+      satir["toplam"] = bosDagilim();
+      return satir;
+    };
     const dagilim: Record<string, DagilimSatir> = {};
-    for (const tur of MASRAF_TURLERI) {
-      dagilim[tur] = {};
-      for (const oran of KDV_ORANLARI) {
-        dagilim[tur][oran] = { matrah: 0, kdv: 0, kkeg: 0, toplam: 0, belgeAdet: 0 };
-      }
-      dagilim[tur]["kkeg"] = { matrah: 0, kdv: 0, kkeg: 0, toplam: 0, belgeAdet: 0 };
-      dagilim[tur]["toplam"] = { matrah: 0, kdv: 0, kkeg: 0, toplam: 0, belgeAdet: 0 };
-    }
 
     for (const item of items) {
       const { matrah, kdv } = kdvHesapla(item.fisToplam, item.kdvOrani);
@@ -280,19 +343,18 @@ export function MasrafHesap() {
         kdvSutunlari[item.kdvOrani].kdv += kdv;
       }
 
-      // Dağılım
-      const dRow = dagilim[item.masrafTuru];
-      if (dRow) {
-        dRow[item.kdvOrani].matrah += matrah;
-        dRow[item.kdvOrani].kdv += kdv;
-        dRow[item.kdvOrani].toplam += item.fisToplam;
-        dRow[item.kdvOrani].belgeAdet++;
-        dRow["kkeg"].kkeg += item.kkeg;
-        dRow["toplam"].toplam += item.fisToplam;
-        dRow["toplam"].matrah += matrah;
-        dRow["toplam"].kdv += kdv;
-        dRow["toplam"].belgeAdet++;
-      }
+      // Dağılım — tür veya oran listede yoksa satır anında oluşturulur
+      const dRow = (dagilim[item.masrafTuru] ??= satirOlustur());
+      const oranSatiri = (dRow[item.kdvOrani] ??= bosDagilim());
+      oranSatiri.matrah += matrah;
+      oranSatiri.kdv += kdv;
+      oranSatiri.toplam += item.fisToplam;
+      oranSatiri.belgeAdet++;
+      dRow["kkeg"].kkeg += item.kkeg;
+      dRow["toplam"].toplam += item.fisToplam;
+      dRow["toplam"].matrah += matrah;
+      dRow["toplam"].kdv += kdv;
+      dRow["toplam"].belgeAdet++;
     }
 
     return {
@@ -301,6 +363,7 @@ export function MasrafHesap() {
       toplamKkeg,
       toplamFis,
       belgeAdet,
+      oranlar,
       kdvSutunlari,
       dagilim,
       genelToplam: toplamFis,
@@ -368,12 +431,84 @@ export function MasrafHesap() {
     }
   };
 
+  /* ─── Excel'den içe aktarma ─── */
+  const handleImportFile = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // aynı dosya tekrar seçilebilsin
+    if (!file) return;
+    try {
+      const buf = await file.arrayBuffer();
+      const sayfalar = masrafDosyasiAyristir(buf)
+        .filter((s) => s.satirlar.length > 0)
+        .map((s) => ({ ...s, secili: true }));
+      if (sayfalar.length === 0) {
+        toast.error("Dosyada aktarılabilir masraf satırı bulunamadı.", {
+          description: "Başlık satırında 'Masraf Türü' sütunu olan sayfalar aranır.",
+        });
+        return;
+      }
+      setImportState({ fileName: file.name, sayfalar });
+    } catch {
+      toast.error("Dosya okunamadı. Geçerli bir Excel (.xlsx / .xls) seçin.");
+    }
+  };
+
+  const toggleImportSheet = (index: number) => {
+    setImportState((prev) =>
+      prev
+        ? {
+            ...prev,
+            sayfalar: prev.sayfalar.map((s, i) =>
+              i === index ? { ...s, secili: !s.secili } : s,
+            ),
+          }
+        : prev,
+    );
+  };
+
+  const handleImportConfirm = () => {
+    if (!importState) return;
+    const secilen = importState.sayfalar.filter((s) => s.secili);
+    const hamSatirlar = secilen.flatMap((s) => s.satirlar);
+    if (hamSatirlar.length === 0) {
+      toast.error("En az bir sayfa seçin.");
+      return;
+    }
+
+    let id = nextId;
+    const eklenen: MasrafItem[] = hamSatirlar.map((s) => {
+      const norm = normalizeItem({ ...s, id: 0 });
+      return { ...norm, id: id++ };
+    });
+    const yeniItems = [...items, ...eklenen];
+
+    // Depolama taşarsa yeni veri sessizce kaybolurdu — önce sınırı kontrol et.
+    const payload = JSON.stringify({
+      firma,
+      items: yeniItems,
+      nextId: id,
+    } satisfies MasrafStorage);
+    if (payload.length > 4_500_000) {
+      toast.error("Veri deposu dolmak üzere — daha az sayfa seçin.");
+      return;
+    }
+
+    setItems(yeniItems);
+    setNextId(id);
+    setImportState(null);
+    toast.success(`${eklenen.length} masraf aktarıldı`, {
+      description: `${secilen.length} sayfa · ${importState.fileName}`,
+    });
+  };
+
   /* ─── Yazdır ─── */
 
   /* ─── Dağılım tablosunda sadece kullanılan türleri göster ─── */
   const kullanilanTurler = useMemo(() => {
     const kullanilan = new Set(items.map((i) => i.masrafTuru));
-    return MASRAF_TURLERI.filter((t) => kullanilan.has(t));
+    const bilinen = MASRAF_TURLERI.filter((t) => kullanilan.has(t));
+    const ekstra = [...kullanilan].filter((t) => !MASRAF_TURLERI.includes(t));
+    return [...bilinen, ...ekstra];
   }, [items]);
 
   const excelSections: ExcelSection[] = [
@@ -419,7 +554,7 @@ export function MasrafHesap() {
     {
       title: "KDV Oranına Göre Dağılım",
       headers: ["KDV Oranı", "Matrah (₺)", "KDV (₺)"],
-      rows: KDV_ORANLARI.flatMap((oran) => {
+      rows: hesaplamalar.oranlar.flatMap((oran) => {
         const s = hesaplamalar.kdvSutunlari[oran];
         return s && (s.matrah !== 0 || s.kdv !== 0)
           ? ([[`%${oran}`, s.matrah, s.kdv]] as (string | number)[][])
@@ -505,6 +640,7 @@ export function MasrafHesap() {
                   value={firma.isyeri}
                   onChange={(e) => setFirma({ ...firma, isyeri: e.target.value })}
                   placeholder="İstanbul"
+                  list="masraf-iller"
                   className="h-9 text-sm"
                 />
               </Field>
@@ -521,6 +657,7 @@ export function MasrafHesap() {
                   value={firma.gunAraligi}
                   onChange={(e) => setFirma({ ...firma, gunAraligi: e.target.value })}
                   placeholder="1-10"
+                  list="masraf-gun-araliklari"
                   className="h-9 text-sm"
                 />
               </Field>
@@ -535,11 +672,30 @@ export function MasrafHesap() {
           className="print-hide"
           actions={
             <div className="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="gap-1.5 text-xs"
+                onClick={() => fileInputRef.current?.click()}
+                title="GÜNCEL MASRAF LİSTESİ.xlsx dosyasından içe aktar"
+              >
+                <FileUp className="size-3.5" />
+                İçe Aktar
+              </Button>
               <Button variant="ghost" size="sm" className="gap-1.5 text-xs" onClick={handleReset}>
                 <RotateCcw className="size-3.5" />
                 Sıfırla
               </Button>
               <PrintButton />
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".xlsx,.xls"
+                className="hidden"
+                tabIndex={-1}
+                aria-hidden="true"
+                onChange={handleImportFile}
+              />
             </div>
           }
         >
@@ -593,7 +749,7 @@ export function MasrafHesap() {
                   onChange={(e) => setForm({ ...form, kdvOrani: Number(e.target.value) })}
                   className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm outline-none focus-visible:border-ring"
                 >
-                  {KDV_ORANLARI.map((o) => (
+                  {hesaplamalar.oranlar.map((o) => (
                     <option key={o} value={o}>%{o}</option>
                   ))}
                 </select>
@@ -662,17 +818,19 @@ export function MasrafHesap() {
               <Field label="Fişin Alındığı Firma">
                 <Input
                   value={form.fisFirma}
-                  onChange={(e) => setForm({ ...form, fisFirma: e.target.value })}
+                  onChange={(e) => { setForm({ ...form, fisFirma: e.target.value }); setError(null); }}
                   placeholder="Örn. Opet Petrol"
+                  list="masraf-saticilar"
                   className="h-9 text-sm"
                 />
               </Field>
               <Field label="Vergi Numarası">
                 <Input
                   value={form.vergiNo}
-                  onChange={(e) => setForm({ ...form, vergiNo: e.target.value })}
+                  onChange={(e) => { setForm({ ...form, vergiNo: e.target.value }); setError(null); }}
                   placeholder="Örn. 1234567890"
-                  className="h-9 text-sm"
+                  list="masraf-satici-kodlari"
+                  className="h-9 text-sm tabular-nums"
                 />
               </Field>
             </div>
@@ -681,8 +839,9 @@ export function MasrafHesap() {
               <Field label="Araç Plaka No">
                 <Input
                   value={form.aracPlaka}
-                  onChange={(e) => setForm({ ...form, aracPlaka: e.target.value })}
+                  onChange={(e) => { setForm({ ...form, aracPlaka: e.target.value }); setError(null); }}
                   placeholder="34 ABC 123"
+                  list="masraf-plakalar"
                   className="h-9 text-sm"
                 />
               </Field>
@@ -699,6 +858,33 @@ export function MasrafHesap() {
             </div>
 
             {error && <p className="text-xs text-destructive">{error}</p>}
+
+            {/* VERİ BANKASI otomatik tamamlama listeleri */}
+            <datalist id="masraf-iller">
+              {ILLER.map((il) => (
+                <option key={il} value={il} />
+              ))}
+            </datalist>
+            <datalist id="masraf-gun-araliklari">
+              {GUN_ARALIKLARI.map((g) => (
+                <option key={g} value={g} />
+              ))}
+            </datalist>
+            <datalist id="masraf-saticilar">
+              {SATICILAR.map((s) => (
+                <option key={`${s.kod}-${s.ad}`} value={s.ad} />
+              ))}
+            </datalist>
+            <datalist id="masraf-satici-kodlari">
+              {SATICILAR.filter((s) => s.kod).map((s) => (
+                <option key={`${s.kod}-${s.ad}`} value={s.kod} />
+              ))}
+            </datalist>
+            <datalist id="masraf-plakalar">
+              {ARAC_PLAKALARI.map((p) => (
+                <option key={p} value={p} />
+              ))}
+            </datalist>
 
             {editingId !== null ? (
               <div className="grid grid-cols-[1fr_auto] gap-2">
@@ -755,7 +941,7 @@ export function MasrafHesap() {
             <div className="mt-4">
               <p className="mb-2 text-xs font-medium text-muted-foreground">KDV Oranına Göre Dağılım</p>
               <div className="grid grid-cols-2 gap-2">
-                {KDV_ORANLARI.map((oran) => {
+                {hesaplamalar.oranlar.map((oran) => {
                   const s = hesaplamalar.kdvSutunlari[oran];
                   if (s.matrah === 0 && s.kdv === 0) return null;
                   return (
@@ -910,14 +1096,12 @@ export function MasrafHesap() {
                 <tr className="border-b border-border/70 text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                   <th className="px-2 py-2 text-center w-6">S.N.</th>
                   <th className="px-2 py-2">Masraf Dağılımı</th>
-                  <th className="px-2 py-2 text-right">Matrah %0</th>
-                  <th className="px-2 py-2 text-right">KDV %0</th>
-                  <th className="px-2 py-2 text-right">Matrah %1</th>
-                  <th className="px-2 py-2 text-right">KDV %1</th>
-                  <th className="px-2 py-2 text-right">Matrah %10</th>
-                  <th className="px-2 py-2 text-right">KDV %10</th>
-                  <th className="px-2 py-2 text-right">Matrah %20</th>
-                  <th className="px-2 py-2 text-right">KDV %20</th>
+                  {hesaplamalar.oranlar.map((oran) => (
+                    <th key={oran} className="px-2 py-2 text-right">Matrah %{oran}</th>
+                  ))}
+                  {hesaplamalar.oranlar.map((oran) => (
+                    <th key={`kdv-${oran}`} className="px-2 py-2 text-right">KDV %{oran}</th>
+                  ))}
                   <th className="px-2 py-2 text-right">KKEG</th>
                   <th className="px-2 py-2 text-right">Toplam</th>
                   <th className="px-2 py-2 text-center">Belge</th>
@@ -938,12 +1122,12 @@ export function MasrafHesap() {
                     >
                       <td className="px-2 py-2 text-center tabular-nums text-muted-foreground">{idx + 1}</td>
                       <td className="px-2 py-2 font-medium text-foreground max-w-[200px] truncate">{tur}</td>
-                      {KDV_ORANLARI.map((oran) => (
+                      {hesaplamalar.oranlar.map((oran) => (
                         <td key={oran} className="px-2 py-2 text-right tabular-nums text-muted-foreground">
                           {d[oran].matrah > 0 ? fmt(d[oran].matrah) : "0,00"}
                         </td>
                       ))}
-                      {KDV_ORANLARI.map((oran) => (
+                      {hesaplamalar.oranlar.map((oran) => (
                         <td key={`kdv-${oran}`} className="px-2 py-2 text-right tabular-nums text-orange-600">
                           {d[oran].kdv > 0 ? fmt(d[oran].kdv) : "0,00"}
                         </td>
@@ -964,12 +1148,12 @@ export function MasrafHesap() {
               <tfoot>
                 <tr className="border-t-2 border-border font-semibold text-foreground">
                   <td colSpan={2} className="px-2 py-2.5 text-right text-xs">Genel Toplam</td>
-                  {KDV_ORANLARI.map((oran) => (
+                  {hesaplamalar.oranlar.map((oran) => (
                     <td key={oran} className="px-2 py-2.5 text-right tabular-nums text-xs">
                       {fmt(hesaplamalar.kdvSutunlari[oran].matrah)}
                     </td>
                   ))}
-                  {KDV_ORANLARI.map((oran) => (
+                  {hesaplamalar.oranlar.map((oran) => (
                     <td key={`kdvf-${oran}`} className="px-2 py-2.5 text-right tabular-nums text-xs text-orange-600">
                       {fmt(hesaplamalar.kdvSutunlari[oran].kdv)}
                     </td>
@@ -994,6 +1178,57 @@ export function MasrafHesap() {
           </p>
         </div>
       )}
+
+      {/* Excel'den içe aktarma — sayfa seçimi */}
+      <Dialog
+        open={importState !== null}
+        onOpenChange={(open) => {
+          if (!open) setImportState(null);
+        }}
+      >
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="tracking-tight font-bold">
+              Excel'den İçe Aktar
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-xs text-muted-foreground">
+            <span className="font-medium text-foreground">{importState?.fileName}</span> —
+            aktarılacak sayfaları seçin. Her sayfanın başlık satırında "Masraf Türü"
+            sütunu bulunmalıdır.
+          </p>
+          <div className="max-h-72 space-y-1 overflow-y-auto">
+            {importState?.sayfalar.map((s, i) => (
+              <label
+                key={s.ad}
+                className="flex cursor-pointer items-center gap-2.5 rounded-md border border-border/60 px-3 py-2 text-sm transition-colors hover:bg-muted/40"
+              >
+                <Checkbox
+                  checked={s.secili}
+                  onCheckedChange={() => toggleImportSheet(i)}
+                />
+                <span className="min-w-0 flex-1 truncate" title={s.ad}>
+                  {s.ad}
+                </span>
+                <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+                  {s.satirlar.length} satır
+                </span>
+              </label>
+            ))}
+          </div>
+          <DialogFooter className="gap-2 sm:justify-end">
+            <span className="mr-auto self-center text-xs tabular-nums text-muted-foreground">
+              {importState
+                ? `${importState.sayfalar.filter((s) => s.secili).reduce((n, s) => n + s.satirlar.length, 0)} satır seçili`
+                : ""}
+            </span>
+            <Button variant="outline" onClick={() => setImportState(null)}>
+              Vazgeç
+            </Button>
+            <Button onClick={handleImportConfirm}>Seçilenleri Aktar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
