@@ -1,8 +1,10 @@
 /**
- * GÜNCEL MASRAF LİSTESİ 2026.xlsx dosyasından üretilmiştir.
+ * GÜNCEL MASRAF LİSTESİ 2026.xlsx dosyasından üretilmiştir
+ * (scripts/uret-masraf-listesi.ts ile).
  *  - "VERİ BANKASI" sayfası: seçilebilir listeler
- *  - Tüm aylık sayfalar: (vergi no → ünvan) hasadı (en sık yazım seçilir)
- * Kaynak dosya güncellenirse bu dosya yeniden üretilmelidir.
+ *  - Tüm aylık sayfalar: (vergi no → ünvan) hasadı; vergi no sayısal,
+ *    ünvan harf içeren satırlar alınır. Aynı no için en sık yazım seçilir.
+ * Kaynak dosya güncellenirse: bun scripts/uret-masraf-listesi.ts
  */
 
 /** Masraf cinsi seçenekleri (xlsx: "MASRAF CİNSİ SEÇİNİZ") */
@@ -928,26 +930,6 @@ export const SATICILAR: { kod: string; ad: string }[] = [
 /** Tüm ünvan + vergi no çiftleri (belge satırlarından + VERİ BANKASI).
  *  Aynı vergi no için en sık kullanılan ünvan yazımı seçilmiştir. */
 export const UNVANLAR: { kod: string; unvan: string }[] = [
-  { kod: "ARAÇ YAKIT GİDERİ", unvan: "0" },
-  { kod: "ARAÇ OTOPARK VE VALE GİDERLERİ", unvan: "0" },
-  { kod: "ARAÇ TAMİR VE BAKIM GİDERLERİ", unvan: "0" },
-  { kod: "MUTFAK YİYECEK VE İÇECEK GİDERLERİ", unvan: "0" },
-  { kod: "MUTFAK SARF MALZEME GİDERLERİ", unvan: "0" },
-  { kod: "YİYECEK-İÇECEK GİDERLERİ", unvan: "0" },
-  { kod: "TEMSİL İKRAM VE YEMEK GİDERLERİ", unvan: "0" },
-  { kod: "OFİS MAKİNA TAM.BAK.VE SARF MALZ. GİD.", unvan: "0" },
-  { kod: "OFİS TAMİR, BAKIM VE ONARIM GİDERİ", unvan: "0" },
-  { kod: "PTT, KARGO, NAKLİYE VE HAMMALİYE GİD.", unvan: "0" },
-  { kod: "KIRTASİYE VE MATBAA GİDERLERİ", unvan: "0" },
-  { kod: "YURTİÇİ SEYAHAT VE KONAKLAMA GİD.", unvan: "0" },
-  { kod: "YURTDIŞI SEYAHAT VE KONAKLAMA GİD.", unvan: "0" },
-  { kod: "TEMİZLİK VE SARF MALZEME GİDERLERİ", unvan: "0" },
-  { kod: "MUHTELİF VE DIŞARDAN SAĞ.HİZ.GİD.", unvan: "0" },
-  { kod: "DİĞER VERGİ RESİM VE HARÇ GİDERLERİ", unvan: "0" },
-  { kod: "NOTER GİDERLERİ", unvan: "0" },
-  { kod: "SAĞLIK GİDERLERİ", unvan: "0" },
-  { kod: "689 KANUNEN KABUL EDİLMEYEN GİD.", unvan: "0" },
-  { kod: "Genel Toplam", unvan: "0" },
   { kod: "17218188062", unvan: "01 OCAKBAŞI ALPER GÜLTEKİN" },
   { kod: "11225102", unvan: "1917 GIDA SAN. LTD. ŞTİ." },
   { kod: "36916680920", unvan: "29 EKİM İŞK.SAL. - İSMAİL KARAKUYU" },
@@ -1392,7 +1374,6 @@ export const UNVANLAR: { kod: string; unvan: string }[] = [
   { kod: "3340905360", unvan: "MARİNA TEKEL - EMİR DOĞAN İNŞ. LTD. ŞTİ." },
   { kod: "27889275558", unvan: "MARMARA ÇAY EVİ - VEDAT ERDOĞMUŞ" },
   { kod: "6131640626", unvan: "MASALİ GIDA LTD. ŞTİ." },
-  { kod: "MASRAF DAĞILIMI", unvan: "MATRAH %0" },
   { kod: "6131687717", unvan: "MAVİYILDIZ MUHALLEBİCİSİ A.Ş." },
   { kod: "6130044717", unvan: "MAYAŞ MOTORLU ARAÇ.VE YAP.MALZ.SAN.TİC.A.Ş." },
   { kod: "6341050866", unvan: "MAYDONOZ DÖNER OFFİC GIDA SAN.VE TİC.LTD.ŞTİ." },

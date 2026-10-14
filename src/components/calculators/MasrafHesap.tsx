@@ -39,6 +39,7 @@ import {
 import { MASRAF_TURLERI, turEsle } from "@/lib/finance/masrafTurler";
 import { CalcCard, Field, PrintButton, PrintHeader, ResultBox, ResultRow, ResultTotalRow } from "./shared";
 import { CalcActions } from "./engine/CalcActions";
+import { FirmaSecici } from "./engine/FirmaSecici";
 import type { ExcelSection } from "./engine/calcExport";
 
 /* ─── Sabitler ─── */
@@ -784,33 +785,37 @@ export function MasrafHesap() {
 
             <div className="grid grid-cols-2 gap-3">
               <Field label="Fişin Alındığı Firma">
-                <Input
-                  value={form.fisFirma}
-                  onChange={(e) => {
+                <FirmaSecici
+                  mod="unvan"
+                  deger={form.fisFirma}
+                  onChange={(ad) => {
                     // Ünvan rehberdeki gibi yazıldıysa vergi numarasını otomatik doldur.
-                    const ad = e.target.value;
                     const kod = KOD_HARITA.get(normTr(ad));
                     setForm({ ...form, fisFirma: ad, ...(kod ? { vergiNo: kod } : {}) });
                     setError(null);
                   }}
+                  onSec={({ unvan, kod }) => {
+                    setForm({ ...form, fisFirma: unvan, vergiNo: kod });
+                    setError(null);
+                  }}
                   placeholder="Örn. Opet Petrol"
-                  list="masraf-saticilar"
-                  className="h-9 text-sm"
                 />
               </Field>
               <Field label="Vergi Numarası">
-                <Input
-                  value={form.vergiNo}
-                  onChange={(e) => {
+                <FirmaSecici
+                  mod="kod"
+                  deger={form.vergiNo}
+                  onChange={(kod) => {
                     // Vergi numarası rehberde varsa ünvanı otomatik doldur.
-                    const kod = e.target.value.trim();
-                    const unvan = UNVAN_HARITA.get(kod);
+                    const unvan = UNVAN_HARITA.get(kod.trim());
                     setForm({ ...form, vergiNo: kod, ...(unvan ? { fisFirma: unvan } : {}) });
                     setError(null);
                   }}
+                  onSec={({ unvan, kod }) => {
+                    setForm({ ...form, fisFirma: unvan, vergiNo: kod });
+                    setError(null);
+                  }}
                   placeholder="Örn. 1234567890"
-                  list="masraf-satici-kodlari"
-                  className="h-9 text-sm tabular-nums"
                 />
               </Field>
             </div>
@@ -848,16 +853,6 @@ export function MasrafHesap() {
             <datalist id="masraf-gun-araliklari">
               {GUN_ARALIKLARI.map((g) => (
                 <option key={g} value={g} />
-              ))}
-            </datalist>
-            <datalist id="masraf-saticilar">
-              {UNVANLAR.map((u) => (
-                <option key={u.kod} value={u.unvan} label={u.kod} />
-              ))}
-            </datalist>
-            <datalist id="masraf-satici-kodlari">
-              {UNVANLAR.map((u) => (
-                <option key={u.kod} value={u.kod} label={u.unvan} />
               ))}
             </datalist>
             <datalist id="masraf-plakalar">
