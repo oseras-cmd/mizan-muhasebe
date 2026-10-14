@@ -28,7 +28,6 @@ import {
   ARAC_PLAKALARI,
   GUN_ARALIKLARI,
   ILLER,
-  MASRAF_CINSLERI,
   MASRAF_KDV_ORANLARI,
   ODEME_TURLERI_XLSX,
   SATICILAR,
@@ -37,34 +36,12 @@ import {
   masrafDosyasiAyristir,
   type MasrafSatiri,
 } from "@/lib/finance/masrafImport";
+import { MASRAF_TURLERI, turEsle } from "@/lib/finance/masrafTurler";
 import { CalcCard, Field, PrintButton, PrintHeader, ResultBox, ResultRow, ResultTotalRow } from "./shared";
 import { CalcActions } from "./engine/CalcActions";
 import type { ExcelSection } from "./engine/calcExport";
 
 /* ─── Sabitler ─── */
-const APP_MASRAF_TURLERI = [
-  "Araç Yakıt Gideri",
-  "Araç Otopark ve Viyadük",
-  "Araç Tamir ve Bakım",
-  "Mutfak Yiyecek ve İçecek",
-  "Mutfak Sarf Malzeme",
-  "Yiyecek İçecek Gideri",
-  "Temsilcilik İkram ve Yemek",
-  "Özel İletişim Giderleri",
-  "İş Teknik Bakım",
-  "PTT Kargo, Koli",
-  "Kırtasiye ve Matbaa",
-  "Yurt İçi Seyahat ve Konaklama",
-  "Yurt Dışı Seyahat ve Konaklama",
-  "Temizlik ve Sarf Malzeme",
-  "Muhasebe ve Danışmanlık",
-  "Diğer Vergi ve Resimler",
-  "İlan, Reklam ve Tanıtım",
-  "Sağlık Giderleri",
-  "Kanunen Kabul Edilmeyen (669)",
-  "Diğer",
-] as const;
-
 /** Listeleri birleştirir; aynı ad (büyük/küçük harf duyarsız) yalnız bir kez yazılır. */
 function birlestir(...listeler: readonly (readonly string[])[]): string[] {
   const sonuc: string[] = [];
@@ -82,9 +59,6 @@ function birlestir(...listeler: readonly (readonly string[])[]): string[] {
   }
   return sonuc;
 }
-
-/** Uygulamanın türleri + Excel VERİ BANKASI'ndaki masraf cinsleri. */
-const MASRAF_TURLERI: string[] = birlestir(APP_MASRAF_TURLERI, MASRAF_CINSLERI);
 
 const BELGE_TURLERI = [
   "Fatura",
@@ -190,15 +164,6 @@ function normTr(value: string): string {
   return value.trim().toLocaleUpperCase("tr-TR");
 }
 
-/** Eskiden yanlış yazılmış türlerin yeni karşılıkları */
-const TUR_ESLEME: Record<string, string> = {
-  "ARAÇ OTOPARK VE VİZYÖR": "Araç Otopark ve Viyadük",
-  "PT. KARGO, KOLİ": "PTT Kargo, Koli",
-  "İLAN REKLAM VE TANITIM": "İlan, Reklam ve Tanıtım",
-  "669 KANUNEN KABUL EDİLMEYEN": "Kanunen Kabul Edilmeyen (669)",
-};
-
-const TUR_HARITA = new Map(MASRAF_TURLERI.map((t) => [normTr(t), t] as const));
 const BELGE_HARITA = new Map(BELGE_TURLERI.map((t) => [normTr(t), t] as const));
 const ODEME_HARITA = new Map(ODEME_TURLERI.map((t) => [normTr(t), t] as const));
 const MERKEZ_HARITA = new Map(MASRAF_MERKEZLERI.map((t) => [normTr(t), t] as const));
@@ -211,7 +176,6 @@ function duzelt(value: string, harita: Map<string, string>, yedek: string): stri
 
 /** Eski kayıtları yeni alan/başlık yapısına taşır. */
 function normalizeItem(raw: MasrafItem): MasrafItem {
-  const turN = normTr(raw.masrafTuru ?? "");
   const merkezEski = normTr(raw.masrafMerkez ?? "");
   let sirket = (raw.sirket ?? "").trim();
   let merkez = duzelt(raw.masrafMerkez ?? "", MERKEZ_HARITA, "Genel");
@@ -223,7 +187,7 @@ function normalizeItem(raw: MasrafItem): MasrafItem {
   return {
     ...raw,
     belgeTipi: duzelt(raw.belgeTipi ?? "", BELGE_HARITA, "Fatura"),
-    masrafTuru: TUR_ESLEME[turN] ?? TUR_HARITA.get(turN) ?? "Diğer",
+    masrafTuru: turEsle(raw.masrafTuru),
     odemeTuru: duzelt(raw.odemeTuru ?? "", ODEME_HARITA, "Havale / EFT"),
     masrafMerkez: merkez,
     sirket,
