@@ -30,7 +30,7 @@ import {
   ILLER,
   MASRAF_KDV_ORANLARI,
   ODEME_TURLERI_XLSX,
-  SATICILAR,
+  UNVANLAR,
 } from "@/data/masrafListesi";
 import {
   masrafDosyasiAyristir,
@@ -73,6 +73,10 @@ const BELGE_TURLERI = [
 const KDV_ORANLARI: number[] = [...new Set([0, 1, 10, 20, ...MASRAF_KDV_ORANLARI])].sort(
   (a, b) => a - b,
 );
+
+/** Vergi no → ünvan ve ünvan → vergi no eşlemeleri (Excel'den gelen tüm çiftler). */
+const UNVAN_HARITA = new Map(UNVANLAR.map((u) => [u.kod, u.unvan]));
+const KOD_HARITA = new Map(UNVANLAR.map((u) => [normTr(u.unvan), u.kod]));
 
 const APP_ODEME_TURLERI = [
   "Nakit",
@@ -782,7 +786,13 @@ export function MasrafHesap() {
               <Field label="Fişin Alındığı Firma">
                 <Input
                   value={form.fisFirma}
-                  onChange={(e) => { setForm({ ...form, fisFirma: e.target.value }); setError(null); }}
+                  onChange={(e) => {
+                    // Ünvan rehberdeki gibi yazıldıysa vergi numarasını otomatik doldur.
+                    const ad = e.target.value;
+                    const kod = KOD_HARITA.get(normTr(ad));
+                    setForm({ ...form, fisFirma: ad, ...(kod ? { vergiNo: kod } : {}) });
+                    setError(null);
+                  }}
                   placeholder="Örn. Opet Petrol"
                   list="masraf-saticilar"
                   className="h-9 text-sm"
@@ -791,7 +801,13 @@ export function MasrafHesap() {
               <Field label="Vergi Numarası">
                 <Input
                   value={form.vergiNo}
-                  onChange={(e) => { setForm({ ...form, vergiNo: e.target.value }); setError(null); }}
+                  onChange={(e) => {
+                    // Vergi numarası rehberde varsa ünvanı otomatik doldur.
+                    const kod = e.target.value.trim();
+                    const unvan = UNVAN_HARITA.get(kod);
+                    setForm({ ...form, vergiNo: kod, ...(unvan ? { fisFirma: unvan } : {}) });
+                    setError(null);
+                  }}
                   placeholder="Örn. 1234567890"
                   list="masraf-satici-kodlari"
                   className="h-9 text-sm tabular-nums"
@@ -835,13 +851,13 @@ export function MasrafHesap() {
               ))}
             </datalist>
             <datalist id="masraf-saticilar">
-              {SATICILAR.map((s) => (
-                <option key={`${s.kod}-${s.ad}`} value={s.ad} />
+              {UNVANLAR.map((u) => (
+                <option key={u.kod} value={u.unvan} label={u.kod} />
               ))}
             </datalist>
             <datalist id="masraf-satici-kodlari">
-              {SATICILAR.filter((s) => s.kod).map((s) => (
-                <option key={`${s.kod}-${s.ad}`} value={s.kod} />
+              {UNVANLAR.map((u) => (
+                <option key={u.kod} value={u.kod} label={u.unvan} />
               ))}
             </datalist>
             <datalist id="masraf-plakalar">
