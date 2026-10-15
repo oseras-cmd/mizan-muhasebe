@@ -1,4 +1,4 @@
-# Mizan — Ön Muhasebe ve Hesaplama Araçları
+# Mizan — Muhasebe ve Hesaplama Araçları
 
 **Mizan**, muhasebeciler ve küçük işletmeler için geliştirilmiş, tarayıcıda çalışan (isterseniz Electron ile masaüstü uygulamasına paketlenen) bir ön muhasebe uygulamasıdır. Ödeme takibi, belge arşivi, görev listesi ve **30 hesaplama aracını** tek çatı altında toplar.
 
