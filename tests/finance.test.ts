@@ -367,22 +367,26 @@ describe("Poliçe gider dağılımı", () => {
     expect(totalsTotal).toBeCloseTo(25000, 2);
   });
 
-  test("ay ortasında başlayan poliçede son ay 365 günle sınırlanır", () => {
+  test("ay ortasında başlayan poliçe 365 güne tam dağıtılır (Burhan Eray referansı)", () => {
     const schedule = computePolicySchedule({
       type: "Binek Araç",
       account: "770",
       startDate: "2026-02-15",
       amount: 26000,
     });
-    // 15-28 Şubat (14 gün) + Mart-Aralık (306 gün) + Ocak (min(31, 45) = 31) = 351 gün
+    // 15–28 Şubat (14 gün) + Mart–Ocak (306 gün) + Şubat 2027'de son 14 gün = 365
     const totalDays = schedule.rows.reduce((sum, r) => sum + r.days, 0);
-    expect(totalDays).toBe(351);
-    expect(schedule.rows[11].days).toBe(31);
+    expect(totalDays).toBe(365);
     // İlk ay giderin başladığı günden itibaren dağıtılır
     expect(schedule.rows[0].days).toBe(14);
+    // Son satır kısmi ay satırıdır ve gelecek yılın hesabına yazılır
+    expect(schedule.rows[schedule.rows.length - 1].days).toBe(14);
+    expect(
+      schedule.rows[schedule.rows.length - 1].accountCode,
+    ).toBe("280");
     const monthsTotal = schedule.rows.reduce((sum, r) => sum + r.amount, 0);
-    // Aylık tutarlar = (tutar − K.K.E.G.) / 365 × 351 gün; K.K.E.G. ayrıca 689'a ayrılır
-    expect(monthsTotal + schedule.kkegAmount).toBeCloseTo(7800 + 18200 * (351 / 365), 2);
+    // Dağıtım kayıpsız: taban + K.K.E.G. tam olarak brüt tutara eşittir
+    expect(monthsTotal + schedule.kkegAmount).toBeCloseTo(26000, 2);
   });
 
   test("ticari araçta K.K.E.G. ayrılmaz", () => {

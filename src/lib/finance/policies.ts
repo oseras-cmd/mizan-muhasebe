@@ -46,12 +46,14 @@ const MONTH_NAMES = [
 
 /**
  * Yıllık poliçe tutarını aylara ve muhasebe hesaplarına dağıtır:
- * ilk ay seçilen gider hesabına (770/730/740/760), yıl içi 180'e,
- * yıl dönümünde (Ocak) 280'e yazılır. Binek araçta %30 K.K.E.G. (689) ayrılır.
+ * ilk ay seçilen gider hesabına (770/730/740/760), aynı yılın ayları 180'e,
+ * gelecek yıla sarkan TÜM aylar (yalnızca Ocak değil) 280'e yazılır;
+ * Binek araçta %30 K.K.E.G. (689) ayrılır.
  *
  * Gün bazlı dağılımda ilk ay başlangıç gününden ay sonuna, aradaki aylar
- * takvim ayının tamamına karşılık gelir; son ay 365 güne tamamlanır
- * (takvim ayını aşmaz).
+ * takvim ayının tamamına karşılık gelir; 365 gün tükenene kadar devam
+ * edilir, bu yüzden son satır kısmi bir ay satırı olabilir (12-13 satır).
+ * Böylece dağıtılan toplam her zaman brüt tutara (binekte tabana) eşittir.
  */
 export function computePolicySchedule(input: {
   type: string;
@@ -77,32 +79,39 @@ export function computePolicySchedule(input: {
     kkeg: kkegAmount,
   };
 
-  // 12 ay boyunca gün bazlı dağılım hesaplama
-  for (let i = 0; i < 12; i++) {
+  let remaining = 365;
+  let i = 0;
+
+  // Gün bazlı dağıtım: 365 gün tükenene kadar ay satırları eklenir.
+  // Boşluk gününde başladıysa ilk ay kısmi, son satır kısmi olabilir
+  // (ör. 20.10 başlangıç → ekim 2026'da 19 günlük son satır),
+  // bu yüzden satır sayısı 12 değil 13 olabilir — Burhan Eray
+  // referans çizelgesi ile birebir.
+  while (remaining > 0) {
     const current = new Date(startYear, startMonth + i, 1);
     const year = current.getFullYear();
     const month = current.getMonth();
     const daysInMonth = new Date(year, month + 1, 0).getDate();
 
-    // İlk ay için poliçenin başladığı günden ay sonuna kadar olan gün sayısını al
+    // İlk ay için poliçenin başladığı günden ay sonuna kadar olan gün sayısı
     let days: number;
     if (i === 0) {
       days = daysInMonth - startDay + 1;
-    } else if (i === 11) {
-      // Son ay, ilk ayın eksik kalan günlerini tamamlar (365 güne tamamlama)
-      const previousTotalDays = rows.reduce((acc, r) => acc + r.days, 0);
-      days = Math.min(daysInMonth, 365 - previousTotalDays);
-      if (days < 0) days = 0;
     } else {
       days = daysInMonth;
     }
+    // Poliçe 365 güne tamamlandıysa son satır kısmi olur
+    if (days > remaining) days = remaining;
+    remaining -= days;
+    const isFirst = i === 0;
+    i++;
 
     const amount = dailyAmount * days;
     const quarter = Math.floor(month / 3) + 1;
 
     let accountCode: string;
-    if (i === 0) accountCode = input.account;
-    else if (year > startYear && month === 0) accountCode = "280";
+    if (isFirst) accountCode = input.account;
+    else if (year > startYear) accountCode = "280";
     else accountCode = "180";
 
     totals[accountCode] = (totals[accountCode] ?? 0) + amount;
