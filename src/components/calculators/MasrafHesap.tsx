@@ -37,6 +37,13 @@ import {
   type MasrafSatiri,
 } from "@/lib/finance/masrafImport";
 import { MASRAF_TURLERI, turEsle } from "@/lib/finance/masrafTurler";
+import {
+  rehberEkle,
+  rehberIceriyorMu,
+  rehberKaydet,
+  rehberYukle,
+  type RehberKaydi,
+} from "@/lib/finance/unvanRehberi";
 import { CalcCard, Field, PrintButton, PrintHeader, ResultBox, ResultRow, ResultTotalRow } from "./shared";
 import { CalcActions } from "./engine/CalcActions";
 import { FirmaSecici } from "./engine/FirmaSecici";
@@ -74,10 +81,6 @@ const BELGE_TURLERI = [
 const KDV_ORANLARI: number[] = [...new Set([0, 1, 10, 20, ...MASRAF_KDV_ORANLARI])].sort(
   (a, b) => a - b,
 );
-
-/** Vergi no → ünvan ve ünvan → vergi no eşlemeleri (Excel'den gelen tüm çiftler). */
-const UNVAN_HARITA = new Map(UNVANLAR.map((u) => [u.kod, u.unvan]));
-const KOD_HARITA = new Map(UNVANLAR.map((u) => [normTr(u.unvan), u.kod]));
 
 const APP_ODEME_TURLERI = [
   "Nakit",
@@ -253,6 +256,8 @@ export function MasrafHesap() {
   const [nextId, setNextId] = useState(initial.nextId);
   const [form, setForm] = useState<Omit<MasrafItem, "id">>({ ...EMPTY_ITEM });
   const [editingId, setEditingId] = useState<number | null>(null);
+  /* Kullanıcının elle eklediği ünvan + vergi no rehberi (yerel depoda kalıcı) */
+  const [rehber, setRehber] = useState<RehberKaydi[]>(rehberYukle);
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [importState, setImportState] = useState<IceAktarimDurumu | null>(null);
@@ -339,24 +344,51 @@ export function MasrafHesap() {
     };
   }, [items]);
 
+  /* ─── Ünvan rehber eşlemeleri: Excel rehberi + kullanıcının kendi kayıtları ─── */
+  const unvanHarita = useMemo(() => {
+    const m = new Map(UNVANLAR.map((u) => [u.kod, u.unvan]));
+    for (const k of rehber) if (k.kod) m.set(k.kod, k.unvan);
+    return m;
+  }, [rehber]);
+  const kodHarita = useMemo(() => {
+    const m = new Map(UNVANLAR.map((u) => [normTr(u.unvan), u.kod]));
+    for (const k of rehber) m.set(normTr(k.unvan), k.kod);
+    return m;
+  }, [rehber]);
+
+  /** Gerekli masraf adı: ünvan yoksa masraf türü başlık olur. */
+  const masrafAdiKur = (): string =>
+    form.masrafAdi.trim() || form.fisFirma.trim() || form.masrafTuru;
+
+  /** Elle girilen yeni ünvan + vergi no çiftini kalıcı rehbere yazar. */
+  const rehbereKayitEkle = () => {
+    const unvan = form.fisFirma.trim();
+    if (unvan.length < 2) return;
+    const kayit: RehberKaydi = { kod: form.vergiNo.trim(), unvan };
+    if (rehberIceriyorMu(rehber, kayit)) return;
+    const sonraki = rehberEkle(rehber, kayit);
+    setRehber(sonraki);
+    rehberKaydet(sonraki);
+  };
+
   /* ─── Ekle / Güncelle ─── */
   const handleAdd = () => {
-    if (!form.masrafAdi.trim()) {
-      setError("Masraf adı girin.");
-      return;
-    }
     if (!Number.isFinite(form.fisToplam) || form.fisToplam <= 0) {
       setError("Geçerli bir tutar girin.");
       return;
     }
+    const ad = masrafAdiKur();
+    rehbereKayitEkle();
     if (editingId !== null) {
-      setItems((prev) => prev.map((i) => (i.id === editingId ? { ...form, id: editingId } : i)));
+      setItems((prev) =>
+        prev.map((i) => (i.id === editingId ? { ...form, masrafAdi: ad, id: editingId } : i)),
+      );
       setEditingId(null);
       setForm({ ...EMPTY_ITEM, belgeTarihi: form.belgeTarihi });
       setError(null);
       return;
     }
-    setItems((prev) => [...prev, { ...form, id: nextId }]);
+    setItems((prev) => [...prev, { ...form, masrafAdi: ad, id: nextId }]);
     setNextId((n) => n + 1);
     setForm({ ...EMPTY_ITEM, belgeTarihi: form.belgeTarihi });
     setError(null);
@@ -691,15 +723,6 @@ export function MasrafHesap() {
               </Field>
             </div>
 
-            <Field label="Masraf Adı / Ünvan">
-              <Input
-                value={form.masrafAdi}
-                onChange={(e) => { setForm({ ...form, masrafAdi: e.target.value }); setError(null); }}
-                placeholder="Örn. Yakıt alımı"
-                className="h-9 text-sm"
-              />
-            </Field>
-
             <div className="grid grid-cols-2 gap-3">
               <Field label="Masraf Türü">
                 <select
@@ -788,9 +811,10 @@ export function MasrafHesap() {
                 <FirmaSecici
                   mod="unvan"
                   deger={form.fisFirma}
+                  ekRehber={rehber}
                   onChange={(ad) => {
                     // Ünvan rehberdeki gibi yazıldıysa vergi numarasını otomatik doldur.
-                    const kod = KOD_HARITA.get(normTr(ad));
+                    const kod = kodHarita.get(normTr(ad));
                     setForm({ ...form, fisFirma: ad, ...(kod ? { vergiNo: kod } : {}) });
                     setError(null);
                   }}
@@ -805,9 +829,10 @@ export function MasrafHesap() {
                 <FirmaSecici
                   mod="kod"
                   deger={form.vergiNo}
+                  ekRehber={rehber}
                   onChange={(kod) => {
                     // Vergi numarası rehberde varsa ünvanı otomatik doldur.
-                    const unvan = UNVAN_HARITA.get(kod.trim());
+                    const unvan = unvanHarita.get(kod.trim());
                     setForm({ ...form, vergiNo: kod, ...(unvan ? { fisFirma: unvan } : {}) });
                     setError(null);
                   }}
