@@ -121,6 +121,8 @@ export function FirmaSecici({
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Input
+          /** type=text şart: Radix aksi halde type=button dayatır ve yazı girişi tamamen kapanır. */
+          type="text"
           id={id}
           value={deger}
           placeholder={placeholder}
