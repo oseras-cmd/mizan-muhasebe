@@ -356,6 +356,28 @@ export function MasrafHesap() {
     return m;
   }, [rehber]);
 
+  /** Daha önce girilen fiş firmaları + vergi numaraları (kalemlerden türetilir). */
+  const oncekiFirmalar = useMemo(() => {
+    const gorulen = new Set<string>();
+    const cikti: RehberKaydi[] = [];
+    for (const i of items) {
+      const unvan = i.fisFirma?.trim();
+      const kod = (i.vergiNo ?? "").trim();
+      if (!unvan || unvan.length < 2) continue;
+      const key = normTr(unvan) + "|" + kod;
+      if (gorulen.has(key)) continue;
+      gorulen.add(key);
+      cikti.push({ kod, unvan });
+    }
+    return cikti;
+  }, [items]);
+
+  /** Seçim listesi kaynağı: kullanıcının rehber kayıtları + önceki firmalar. */
+  const unvanKaynaklari = useMemo(
+    () => [...rehber, ...oncekiFirmalar],
+    [rehber, oncekiFirmalar],
+  );
+
   /** Gerekli masraf adı: ünvan yoksa masraf türü başlık olur. */
   const masrafAdiKur = (): string =>
     form.masrafAdi.trim() || form.fisFirma.trim() || form.masrafTuru;
@@ -811,7 +833,7 @@ export function MasrafHesap() {
                 <FirmaSecici
                   mod="unvan"
                   deger={form.fisFirma}
-                  ekRehber={rehber}
+                  ekRehber={unvanKaynaklari}
                   onChange={(ad) => {
                     // Ünvan rehberdeki gibi yazıldıysa vergi numarasını otomatik doldur.
                     const kod = kodHarita.get(normTr(ad));
@@ -829,7 +851,7 @@ export function MasrafHesap() {
                 <FirmaSecici
                   mod="kod"
                   deger={form.vergiNo}
-                  ekRehber={rehber}
+                  ekRehber={unvanKaynaklari}
                   onChange={(kod) => {
                     // Vergi numarası rehberde varsa ünvanı otomatik doldur.
                     const unvan = unvanHarita.get(kod.trim());
